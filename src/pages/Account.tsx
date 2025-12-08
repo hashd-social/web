@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { User, Shield, Key, Wallet, Inbox, Info, Hash, Edit2, Check, X } from 'lucide-react';
+import { User, Shield, Key, Wallet, Inbox, Info, Hash, Edit2, Check, X, Image as ImageIcon } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
-import { MailboxInfo, SimpleKeyManager } from '../utils/crypto-simple';
+import { MailboxInfo, SimpleKeyManager, SimpleCryptoUtils } from '../utils/crypto-simple';
 import { contractService } from '../utils/contracts';
+import { HashdTagNFTCard } from '../components/HashdTagNFTCard';
 
 interface AccountProps {
   currentMailbox: MailboxInfo | null;
@@ -34,63 +35,215 @@ export const Account: React.FC<AccountProps> = ({
   const [editingHash, setEditingHash] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [blockchainAccounts, setBlockchainAccounts] = useState<{name: string, type: 'named' | 'bare', publicKey?: string}[]>([]);
+  const [hashdTagNFTs, setHashdTagNFTs] = useState<Array<{
+    tokenId: string;
+    fullName: string;
+    domain: string;
+    tokenURI: string;
+  }>>([]);
+  const [nftsLoading, setNftsLoading] = useState(false);
 
-  // Fetch named and bare accounts from blockchain on mount
-  useEffect(() => {
-    const fetchAccounts = async () => {
+  // Fetch named and bare accounts from blockchain
+  const fetchAccounts = async () => {
       if (!userAddress) return;
+      
+      const accounts: {name: string, type: 'named' | 'bare', publicKey?: string}[] = [];
+      
       try {
-        const accounts: {name: string, type: 'named' | 'bare', publicKey?: string}[] = [];
         
-        // Fetch named accounts
+        // Fetch named accounts with their public keys
         const named = await contractService.getOwnerNamedAccounts(userAddress);
         console.log('📋 Named accounts for wallet:', named);
-        named.forEach(name => accounts.push({ name, type: 'named' }));
         
-        // Fetch all bare accounts
-        try {
-          const bareAccounts = await contractService.getBareAccounts(userAddress);
-          console.log('📋 Bare accounts for wallet:', bareAccounts);
-          
-          bareAccounts.publicKeys.forEach((publicKey, index) => {
-            if (bareAccounts.isActives[index]) {
-              accounts.push({ 
-                name: `Bare Account ${index + 1}`, 
-                type: 'bare',
-                publicKey: publicKey.slice(0, 20) + '...'
-              });
-            }
-          });
-        } catch (error) {
-          console.warn('Could not fetch bare accounts:', error);
+        for (const name of named) {
+          try {
+            // Get public key for each named account
+            const publicKey = await contractService.getPublicKeyByName(name);
+            accounts.push({ 
+              name, 
+              type: 'named',
+              publicKey: publicKey // Full public key, no truncation
+            });
+          } catch (error) {
+            console.warn(`Could not fetch public key for ${name}:`, error);
+            accounts.push({ name, type: 'named' });
+          }
         }
         
-        setBlockchainAccounts(accounts);
+        // Fetch all bare accounts with full public keys
+        try {
+          // First check the count
+          const bareCount = await contractService.getBareAccountCount(userAddress);
+          console.log('📊 Bare account count from contract:', bareCount);
+          
+          const bareAccounts = await contractService.getBareAccounts(userAddress);
+          console.log('📋 Raw bare accounts result:', bareAccounts);
+          console.log('📊 Total bare accounts on-chain:', bareAccounts.publicKeys.length);
+          
+          bareAccounts.publicKeys.forEach((publicKey, index) => {
+            const isActive = bareAccounts.isActives[index];
+            console.log(`  [${index}] ${isActive ? '✅ ACTIVE' : '❌ INACTIVE'} - publicKey:`, publicKey);
+            
+            if (isActive) {
+              // Match with localStorage mailbox to get custom name
+              const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(publicKey);
+              const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+              const localMailbox = mailboxes.find(m => m.publicKeyHash === publicKeyHash);
+              
+              const displayName = localMailbox?.name || `Bare Account ${index + 1}`;
+              
+              const account = { 
+                name: displayName, 
+                type: 'bare' as const,
+                publicKey: publicKey
+              };
+              console.log(`  📝 Using name from localStorage: ${displayName}`);
+              accounts.push(account);
+            }
+          });
+          
+          const activeCount = bareAccounts.isActives.filter(Boolean).length;
+          const inactiveCount = bareAccounts.publicKeys.length - activeCount;
+          console.log(`📊 Active: ${activeCount}, Inactive: ${inactiveCount}`);
+        } catch (error) {
+          console.error('❌ Error fetching bare accounts:', error);
+        }
+        
       } catch (error) {
         console.error('Error fetching blockchain accounts:', error);
       }
+      
+      // Always set accounts, even if some fetches failed
+      console.log('📦 Total accounts to display:', accounts.length, accounts);
+      setBlockchainAccounts(accounts);
     };
-    fetchAccounts();
+
+  // Sync localStorage mailboxes with blockchain accounts
+  const syncMailboxes = async () => {
+    if (!userAddress) return;
+    
+    console.log('🔄 Syncing localStorage mailboxes with blockchain...');
+    const localMailboxes = SimpleKeyManager.getMailboxList(userAddress);
+    console.log('📦 Local mailboxes:', localMailboxes.length);
+    
+    // Get all on-chain accounts
+    const namedAccounts = await contractService.getOwnerNamedAccounts(userAddress);
+    const bareAccounts = await contractService.getBareAccounts(userAddress);
+    
+    // Build set of valid public key hashes from blockchain
+    const validHashes = new Set<string>();
+    
+    // Add named accounts
+    for (const name of namedAccounts) {
+      try {
+        const publicKey = await contractService.getPublicKeyByName(name);
+        const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(publicKey);
+        const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+        validHashes.add(publicKeyHash);
+      } catch (error) {
+        console.warn(`Could not get public key for ${name}`);
+      }
+    }
+    
+    // Add bare accounts
+    bareAccounts.publicKeys.forEach((publicKey, index) => {
+      if (bareAccounts.isActives[index]) {
+        const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(publicKey);
+        const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+        validHashes.add(publicKeyHash);
+      }
+    });
+    
+    console.log('✅ Valid hashes from blockchain:', validHashes.size);
+    
+    // Filter local mailboxes to only keep those that exist on-chain
+    const syncedMailboxes = localMailboxes.filter(m => validHashes.has(m.publicKeyHash));
+    
+    if (syncedMailboxes.length !== localMailboxes.length) {
+      console.log(`🧹 Removing ${localMailboxes.length - syncedMailboxes.length} orphaned mailboxes from localStorage`);
+      const mailboxesKey = `hashd_mailboxes_${userAddress.toLowerCase()}`;
+      localStorage.setItem(mailboxesKey, JSON.stringify(syncedMailboxes));
+      onRefreshMailboxes();
+    } else {
+      console.log('✅ All local mailboxes are synced with blockchain');
+    }
+  };
+
+  // Fetch accounts on mount and when userAddress or keyPair changes (keyPair indicates full connection)
+  useEffect(() => {
+    if (userAddress && keyPair) {
+      // Retry mechanism to wait for contracts to initialize
+      let retryCount = 0;
+      const maxRetries = 5;
+      
+      const attemptFetch = async () => {
+        try {
+          const bareCount = await contractService.getBareAccountCount(userAddress);
+          console.log(`✅ Contracts ready, bare count: ${bareCount}`);
+          await fetchAccounts();
+          await syncMailboxes(); // Sync after fetching
+        } catch (error: any) {
+          if (error.message.includes('not initialized') && retryCount < maxRetries) {
+            retryCount++;
+            console.log(`⏳ Contracts not ready yet, retry ${retryCount}/${maxRetries} in 1s...`);
+            setTimeout(attemptFetch, 1000);
+          } else {
+            console.error('Failed to fetch accounts after retries:', error);
+            // Fetch anyway to at least show named accounts
+            fetchAccounts();
+          }
+        }
+      };
+      
+      // Initial delay then start attempting
+      const timer = setTimeout(attemptFetch, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [userAddress, keyPair]);
+
+  // Fetch HashdTag NFTs
+  const fetchNFTs = async () => {
+    if (!userAddress) return;
+    try {
+      setNftsLoading(true);
+      const nfts = await contractService.getHashdTagNFTs(userAddress);
+      console.log('🎨 HashdTag NFTs for wallet:', nfts);
+      setHashdTagNFTs(nfts);
+    } catch (error) {
+      console.error('Error fetching HashdTag NFTs:', error);
+    } finally {
+      setNftsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNFTs();
   }, [userAddress]);
 
-  const handleRename = (mailbox: MailboxInfo) => {
+  const handleRename = (publicKeyHash: string) => {
     if (!editName.trim()) return;
+    
+    console.log('🏷️ Renaming mailbox with hash:', publicKeyHash, 'to:', editName.trim());
     
     // Update mailbox name in localStorage
     const allMailboxes = SimpleKeyManager.getMailboxList(userAddress);
     const updated = allMailboxes.map(m => 
-      m.publicKeyHash === mailbox.publicKeyHash 
+      m.publicKeyHash === publicKeyHash 
         ? { ...m, name: editName.trim() }
         : m
     );
-    localStorage.setItem(
-      userAddress ? `hashd_mailboxes_${userAddress.toLowerCase()}` : 'hashd_mailboxes',
-      JSON.stringify(updated)
-    );
+    
+    const mailboxesKey = userAddress ? `hashd_mailboxes_${userAddress.toLowerCase()}` : 'hashd_mailboxes';
+    localStorage.setItem(mailboxesKey, JSON.stringify(updated));
+    
+    console.log('✅ Mailbox renamed in localStorage');
     
     setEditingHash(null);
     setEditName('');
     onRefreshMailboxes();
+    
+    // Refetch accounts to show updated name
+    fetchAccounts();
   };
 
   return (
@@ -115,12 +268,72 @@ export const Account: React.FC<AccountProps> = ({
               </p>
               {currentMailbox ? (
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-start">
                     <span className="text-sm text-gray-400 font-mono">ACTIVE MAILBOX:</span>
-                    <span className="text-sm font-bold text-white font-mono">
-                      {currentMailbox.name}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {editingHash === 'current' ? (
+                        <>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            placeholder="Enter custom name"
+                            className="px-2 py-1 bg-gray-900 border border-cyan-500/50 rounded text-sm text-white font-mono focus:outline-none focus:border-cyan-500"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleRename(currentMailbox.publicKeyHash);
+                              } else if (e.key === 'Escape') {
+                                setEditingHash(null);
+                                setEditName('');
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => handleRename(currentMailbox.publicKeyHash)}
+                            className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                            title="Save"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingHash(null);
+                              setEditName('');
+                            }}
+                            className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                            title="Cancel"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-sm font-bold text-white font-mono">
+                            {currentMailbox.name}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setEditingHash('current');
+                              setEditName(currentMailbox.name);
+                            }}
+                            className="p-1 text-gray-400 hover:text-cyan-400 transition-colors"
+                            title="Rename mailbox"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
+                  {currentMailbox.publicKey && (
+                    <div className="flex justify-between items-start">
+                      <span className="text-sm text-gray-400 font-mono">PUBLIC KEY:</span>
+                      <div className="text-xs text-gray-500 font-mono break-all max-w-md text-right">
+                        {currentMailbox.publicKey}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-400 font-mono">CREATED:</span>
                     <span className="text-sm font-bold text-white font-mono">
@@ -137,17 +350,7 @@ export const Account: React.FC<AccountProps> = ({
               ) : (
                 <p className="text-sm text-gray-400 font-mono">NO.ACTIVE.MAILBOX</p>
               )}
-            </div>
-
-            {/* Mailbox Actions */}
-            <div className="bg-gray-800/50 rounded-lg p-6">
-              <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-                Mailbox Actions
-              </h3>
-              <p className="text-sm text-gray-400 mb-4">
-                Create, switch, or manage your mailboxes.
-              </p>
-              <div className="space-y-4">
+       <div className="space-y-4 pt-8">
                 {!keyPair && (
                   <button
                     onClick={onSetupMailbox}
@@ -180,24 +383,26 @@ export const Account: React.FC<AccountProps> = ({
                     SWITCH / CREATE MAILBOX
                   </button>
                 )}
-              </div>
+              </div>              
             </div>
 
             {/* Stored Mailboxes - from blockchain */}
             {blockchainAccounts.length > 0 && (
               <div className="bg-gray-800/50 rounded-lg p-6">
                 <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-                  Registered Accounts ({blockchainAccounts.length})
+                  Linked Mailboxes ({blockchainAccounts.length})
                 </h3>
                 <p className="text-sm text-gray-400 mb-4">
                   All accounts registered on the blockchain for this wallet.
                 </p>
                 <div className="space-y-3">
                   {blockchainAccounts.map((account) => {
-                    const isCurrent = currentMailbox?.name === account.name;
+                    // Compare by public key instead of name to handle renamed bare accounts
+                    const isCurrent = currentMailbox?.publicKey && account.publicKey && 
+                      currentMailbox.publicKey.toLowerCase() === account.publicKey.toLowerCase();
                     return (
                       <div
-                        key={account.name}
+                        key={account.publicKey || account.name}
                         className={`flex items-center justify-between p-4 rounded-lg border ${
                           isCurrent
                             ? 'bg-cyan-900/20 border-cyan-500/50'
@@ -205,25 +410,96 @@ export const Account: React.FC<AccountProps> = ({
                         }`}
                       >
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-bold text-white font-mono">
-                              {account.name}
-                            </h4>
-                            {account.type === 'bare' && (
-                              <span className="text-xs bg-gray-600 text-gray-200 px-2 py-0.5 rounded font-mono">
-                                BARE
-                              </span>
-                            )}
-                            {isCurrent && (
-                              <span className="text-xs bg-cyan-500 text-white px-2 py-0.5 rounded font-mono font-bold">
-                                ACTIVE
-                              </span>
-                            )}
-                          </div>
+                          {editingHash === account.publicKey && account.type === 'bare' ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                placeholder="Enter custom name"
+                                className="flex-1 px-3 py-1.5 bg-gray-900 border border-cyan-500/50 rounded text-sm text-white font-mono focus:outline-none focus:border-cyan-500"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    // Derive publicKeyHash from publicKey
+                                    if (account.publicKey) {
+                                      const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
+                                      const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+                                      handleRename(publicKeyHash);
+                                    }
+                                  } else if (e.key === 'Escape') {
+                                    setEditingHash(null);
+                                    setEditName('');
+                                  }
+                                }}
+                              />
+                              <button
+                                onClick={() => {
+                                  // Derive publicKeyHash from publicKey
+                                  if (account.publicKey) {
+                                    const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
+                                    const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+                                    handleRename(publicKeyHash);
+                                  }
+                                }}
+                                className="p-1.5 text-green-400 hover:text-green-300 transition-colors"
+                                title="Save"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingHash(null);
+                                  setEditName('');
+                                }}
+                                className="p-1.5 text-red-400 hover:text-red-300 transition-colors"
+                                title="Cancel"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-white font-mono">
+                                {(() => {
+                                  // For bare accounts, check if there's a custom name in localStorage
+                                  if (account.type === 'bare' && account.publicKey) {
+                                    const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
+                                    const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+                                    const localMailbox = mailboxes.find(m => m.publicKeyHash === publicKeyHash);
+                                    return localMailbox?.name || account.name;
+                                  }
+                                  return account.name;
+                                })()}
+                              </h4>
+                              {account.type === 'bare' && (
+                                <>
+                                  <span className="text-xs bg-gray-600 text-gray-200 px-2 py-0.5 rounded font-mono">
+                                    BARE
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      setEditingHash(account.publicKey || null);
+                                      setEditName(account.name);
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-cyan-400 transition-colors"
+                                    title="Rename mailbox"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                              {isCurrent && (
+                                <span className="text-xs bg-cyan-500 text-white px-2 py-0.5 rounded font-mono font-bold">
+                                  ACTIVE
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {account.publicKey && (
-                            <div className="text-xs text-gray-500 mt-1 font-mono flex items-center gap-1">
-                              <Hash className="w-3 h-3" />
-                              <span>{account.publicKey}</span>
+                            <div className="text-xs text-gray-500 mt-1 font-mono flex items-start gap-1">
+                              <Hash className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                              <span className="break-all">{account.publicKey}</span>
                             </div>
                           )}
                         </div>
@@ -243,6 +519,53 @@ export const Account: React.FC<AccountProps> = ({
                 </div>
               </div>
             )}
+
+            {/* HashdTag NFTs */}
+            <div className="bg-gray-800/50 rounded-lg p-6">
+              <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono flex items-center gap-2">
+                <ImageIcon className="w-5 h-5" />
+                HashdTag NFTs ({hashdTagNFTs.length})
+              </h3>
+              <p className="text-sm text-gray-400 mb-4">
+                Your HashdTag identity NFTs with on-chain metadata and SVG artwork.
+              </p>
+              
+              {nftsLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30 animate-pulse">
+                      <div className="aspect-square bg-gray-700/50 rounded-lg mb-3"></div>
+                      <div className="h-4 bg-gray-700/50 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-gray-700/50 rounded w-1/2"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : hashdTagNFTs.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {hashdTagNFTs.map((nft) => (
+                    <HashdTagNFTCard
+                      key={nft.tokenId}
+                      tokenId={nft.tokenId}
+                      fullName={nft.fullName}
+                      domain={nft.domain}
+                      tokenURI={nft.tokenURI}
+                      userAddress={userAddress}
+                      onRefresh={fetchNFTs}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <ImageIcon className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                  <p className="text-sm text-gray-400 font-mono">
+                    No HashdTag NFTs found.
+                  </p>
+                  <p className="text-xs text-gray-500 font-mono mt-1">
+                    Register a named account to mint your first HashdTag NFT!
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right Column - How It Works */}

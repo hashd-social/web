@@ -403,6 +403,7 @@ export interface MailboxInfo {
   pin: string;
   name: string;
   publicKeyHash: string;
+  publicKey?: string; // Full public key hex for comparison with blockchain accounts
   createdAt: number;
   lastUsed: number;
   isIncomplete?: boolean;

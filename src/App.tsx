@@ -157,6 +157,11 @@ function App() {
   useEffect(() => {
     (window as any).__HASHD_SETTINGS__ = { rpcUrl };
   }, [rpcUrl]);
+  
+  // Initialize read-only contracts on app mount
+  useEffect(() => {
+    contractService.initializeReadOnlyContracts();
+  }, []);
 
   // Sync activeTab with current route
   useEffect(() => {
@@ -456,8 +461,8 @@ function App() {
       return loadedMailboxes;
     }
     
-    // Build a map of publicKeyHash -> {accountName, timestamp}
-    const publicKeyHashToInfo = new Map<string, { name: string; timestamp: number }>();
+    // Build a map of publicKeyHash -> {accountName, timestamp, publicKey}
+    const publicKeyHashToInfo = new Map<string, { name: string; timestamp: number; publicKey: string }>();
     
     for (const accountName of namedAccounts) {
       try {
@@ -467,7 +472,7 @@ function App() {
         const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
         // Store timestamp in milliseconds (contract returns seconds, so multiply by 1000)
         const timestampMs = accountInfo.timestamp * 1000;
-        publicKeyHashToInfo.set(publicKeyHash, { name: accountName, timestamp: timestampMs });
+        publicKeyHashToInfo.set(publicKeyHash, { name: accountName, timestamp: timestampMs, publicKey: accountInfo.publicKey });
         console.log(`🔑 Mapped ${accountName} -> hash ${publicKeyHash}, registered: ${new Date(timestampMs).toLocaleString()}`);
       } catch (error) {
         console.warn(`Could not get info for account ${accountName}:`, error);
@@ -480,10 +485,11 @@ function App() {
       
       if (matchedInfo) {
         console.log(`✅ Matched mailbox ${index} (hash: ${mailbox.publicKeyHash}) to account: ${matchedInfo.name}`);
-        // Update with blockchain timestamp
+        // Update with blockchain timestamp and public key
         return { 
           ...mailbox, 
           name: matchedInfo.name,
+          publicKey: matchedInfo.publicKey,
           createdAt: matchedInfo.timestamp // Use blockchain registration timestamp
         };
       }
@@ -1127,16 +1133,11 @@ function App() {
         }
       } else {
         // No name provided, register bare account only
-        const hasBare = await contractService.hasBareAccount(address);
-        
-        if (!hasBare) {
-          console.log('📧 Registering bare account (FREE)...');
-          const bareTx = await contractService.registerBareAccount(keyHex);
-          await bareTx.wait();
-          console.log(`✅ Bare account registered for ${address}`);
-        } else {
-          console.log('✅ Bare account already exists');
-        }
+        // Note: You can have multiple bare accounts per wallet, so always register
+        console.log('📧 Registering bare account (FREE)...');
+        const bareTx = await contractService.registerBareAccount(keyHex);
+        await bareTx.wait();
+        console.log(`✅ Bare account registered for ${address}`);
       }
       
       // Step 3 complete - move to step 4
@@ -1594,7 +1595,7 @@ function App() {
                 onCompleteSetup={registerKey}
                 onSwitchOrCreate={() => {
                   console.log('🔄 Opening switch mailbox modal');
-                  setModalContext('switch');
+                  setModalContext('initial');
                   setShowPinPrompt(true);
                 }}
                 onSwitchMailbox={switchMailbox}
@@ -1628,21 +1629,16 @@ function App() {
         />
       )}
 
-      {/* Mailbox Switcher */}
-      {state.isConnected && (
+      {/* Mailbox Switcher - Temporarily disabled */}
+      {/* {state.isConnected && (
         <MailboxSwitcher
           mailboxes={mailboxes}
           userAddress={state.userAddress}
           onSwitch={switchMailbox}
-          onCompleteIncomplete={() => {
-            setModalContext('create');
-            setShowPinPrompt(true);
-          }}
-          onShowWarning={(message) => {
-            setState(prev => ({ ...prev, warning: message }));
-          }}
+          onCompleteIncomplete={handleCompleteIncompleteRegistration}
+          onShowWarning={(message) => toast.error(message)}
         />
-      )}
+      )} */}
 
       {/* Logout Confirmation Modal */}
       <LogoutModal

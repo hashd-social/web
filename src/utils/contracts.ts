@@ -85,6 +85,11 @@ export const ACCOUNT_REGISTRY_ABI = [
   "function domainFees(string domain) view returns (uint256)",
   "function availableDomains(string domain) view returns (bool)",
   
+  // HashdTag attachment functions
+  "function attachHashdTag(string fullName, bytes bareAccountPublicKey)",
+  "function detachHashdTag(string fullName)",
+  "function isHashdTagAttached(string fullName) view returns (bool)",
+  
   // Owner functions
   "function addDomain(string domain, uint256 fee)",
   "function setDomainFee(string domain, uint256 newFee)",
@@ -325,6 +330,28 @@ export const ERC20_ABI = [
   "function bondingCurveSupply() view returns (uint256)"
 ];
 
+export const HASHD_TAG_ABI = [
+  // ERC721 Standard
+  "function balanceOf(address owner) view returns (uint256)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
+  "function tokenURI(uint256 tokenId) view returns (string)",
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function transferFrom(address from, address to, uint256 tokenId)",
+  "function safeTransferFrom(address from, address to, uint256 tokenId)",
+  
+  // HashdTag specific
+  "function tokenIdToName(uint256 tokenId) view returns (string)",
+  "function tokenIdToDomain(uint256 tokenId) view returns (string)",
+  "function domainColors(string domain) view returns (string)",
+  "function accountRegistry() view returns (address)",
+  
+  // Events
+  "event HashdTagMinted(address indexed owner, uint256 indexed tokenId, string name, string domain)",
+  "event HashdTagTransferred(address indexed from, address indexed to, uint256 indexed tokenId, string name)",
+  "event DomainColorUpdated(string indexed domain, string color)"
+];
+
 export const ERC721_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
   "function ownerOf(uint256 tokenId) view returns (address)",
@@ -420,6 +447,9 @@ export const CONTRACT_ADDRESSES = {
   })(),
   MESSAGE_CONTRACT: process.env.REACT_APP_MESSAGE_CONTRACT || (() => {
     throw new Error('REACT_APP_MESSAGE_CONTRACT not set in .env file');
+  })(),
+  HASHD_TAG: process.env.REACT_APP_HASHD_TAG || (() => {
+    throw new Error('REACT_APP_HASHD_TAG not set in .env file');
   })(),
 };
 
@@ -571,11 +601,45 @@ export class ContractService {
     }
   }
 
+  // Initialize contracts with read-only provider (for read operations before wallet connection)
+  initializeReadOnlyContracts() {
+    const provider = this.getReadProvider();
+    
+    // Initialize AccountRegistry for read operations
+    if (!this.contracts.accountRegistry) {
+      this.contracts.accountRegistry = new ethers.Contract(
+        CONTRACT_ADDRESSES.ACCOUNT_REGISTRY,
+        ACCOUNT_REGISTRY_ABI,
+        provider
+      );
+    }
+    
+    // Initialize KeyRegistry for read operations
+    if (!this.contracts.keyRegistry) {
+      this.contracts.keyRegistry = new ethers.Contract(
+        CONTRACT_ADDRESSES.KEY_REGISTRY,
+        KEY_REGISTRY_ABI,
+        provider
+      );
+    }
+
+    // Initialize MessageContract for read operations
+    if (!this.contracts.messageContract) {
+      this.contracts.messageContract = new ethers.Contract(
+        CONTRACT_ADDRESSES.MESSAGE_CONTRACT,
+        MESSAGE_CONTRACT_ABI,
+        provider
+      );
+    }
+    
+    console.log('✅ Read-only contracts initialized');
+  }
+
   private async initializeContracts() {
     if (!this.signer) throw new Error('Signer not available');
 
     try {
-      // Initialize AccountRegistry
+      // Re-initialize contracts with signer for write operations
       this.contracts.accountRegistry = new ethers.Contract(
         CONTRACT_ADDRESSES.ACCOUNT_REGISTRY,
         ACCOUNT_REGISTRY_ABI,
@@ -1074,7 +1138,9 @@ export class ContractService {
     timestamps: bigint[];
     isActives: boolean[];
   }> {
-    if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
+    if (!this.contracts.accountRegistry) {
+      throw new Error('AccountRegistry not initialized - call initializeReadOnlyContracts() first');
+    }
     const result = await this.contracts.accountRegistry.getBareAccounts(address);
     return {
       publicKeys: result[0],
@@ -1084,9 +1150,25 @@ export class ContractService {
   }
 
   async getBareAccountCount(address: string): Promise<number> {
-    if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
+    if (!this.contracts.accountRegistry) {
+      throw new Error('AccountRegistry not initialized - call initializeReadOnlyContracts() first');
+    }
     const count = await this.contracts.accountRegistry.getBareAccountCount(address);
     return Number(count);
+  }
+
+  async getBareAccountAtIndex(address: string, index: number): Promise<{
+    publicKey: string;
+    timestamp: bigint;
+    isActive: boolean;
+  }> {
+    if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
+    const result = await this.contracts.accountRegistry.getBareAccountAtIndex(address, index);
+    return {
+      publicKey: result[0],
+      timestamp: result[1],
+      isActive: result[2]
+    };
   }
 
   async getPublicKeyByAddress(address: string): Promise<string> {
@@ -1802,6 +1884,167 @@ export class ContractService {
       terminatedAt: info.terminatedAt,
       terminatedBy: info.terminatedBy
     };
+  }
+
+  // ============================================
+  // HASHDTAG NFT METHODS
+  // ============================================
+
+  /**
+   * Get all HashdTag NFTs owned by an address
+   */
+  async getHashdTagNFTs(ownerAddress: string): Promise<Array<{
+    tokenId: string;
+    fullName: string;
+    domain: string;
+    tokenURI: string;
+  }>> {
+    try {
+      const provider = this.getReadProvider();
+      const hashdTag = new ethers.Contract(
+        CONTRACT_ADDRESSES.HASHD_TAG,
+        HASHD_TAG_ABI,
+        provider
+      );
+
+      // Get all named accounts for this address
+      const namedAccounts = await this.getOwnerNamedAccounts(ownerAddress);
+      
+      const nfts = [];
+      
+      for (const fullName of namedAccounts) {
+        try {
+          // Generate token ID from full name (same as contract does)
+          const tokenId = ethers.keccak256(ethers.toUtf8Bytes(fullName));
+          
+          // Verify this address owns the NFT
+          const owner = await hashdTag.ownerOf(tokenId);
+          
+          if (owner.toLowerCase() === ownerAddress.toLowerCase()) {
+            // Get token URI (contains metadata)
+            const tokenURI = await hashdTag.tokenURI(tokenId);
+            
+            // Get domain
+            const domain = await hashdTag.tokenIdToDomain(tokenId);
+            
+            nfts.push({
+              tokenId,
+              fullName,
+              domain,
+              tokenURI
+            });
+          }
+        } catch (error) {
+          console.warn(`Could not fetch NFT for ${fullName}:`, error);
+        }
+      }
+      
+      return nfts;
+    } catch (error) {
+      console.error('Error fetching HashdTag NFTs:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get HashdTag NFT balance for an address
+   */
+  async getHashdTagBalance(ownerAddress: string): Promise<number> {
+    try {
+      const provider = this.getReadProvider();
+      const hashdTag = new ethers.Contract(
+        CONTRACT_ADDRESSES.HASHD_TAG,
+        HASHD_TAG_ABI,
+        provider
+      );
+      
+      const balance = await hashdTag.balanceOf(ownerAddress);
+      return Number(balance);
+    } catch (error) {
+      console.error('Error fetching HashdTag balance:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get HashdTag NFT metadata by token ID
+   */
+  async getHashdTagMetadata(tokenId: string): Promise<{
+    fullName: string;
+    domain: string;
+    tokenURI: string;
+  } | null> {
+    try {
+      const provider = this.getReadProvider();
+      const hashdTag = new ethers.Contract(
+        CONTRACT_ADDRESSES.HASHD_TAG,
+        HASHD_TAG_ABI,
+        provider
+      );
+      
+      const fullName = await hashdTag.tokenIdToName(tokenId);
+      const domain = await hashdTag.tokenIdToDomain(tokenId);
+      const tokenURI = await hashdTag.tokenURI(tokenId);
+      
+      return {
+        fullName,
+        domain,
+        tokenURI
+      };
+    } catch (error) {
+      console.error('Error fetching HashdTag metadata:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if a HashdTag is attached to an account
+   */
+  async isHashdTagAttached(fullName: string): Promise<boolean> {
+    try {
+      const provider = this.getReadProvider();
+      const accountRegistry = new ethers.Contract(
+        CONTRACT_ADDRESSES.ACCOUNT_REGISTRY,
+        ACCOUNT_REGISTRY_ABI,
+        provider
+      );
+      
+      return await accountRegistry.isHashdTagAttached(fullName);
+    } catch (error) {
+      console.error('Error checking HashdTag attachment:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Detach a HashdTag from an account
+   */
+  async detachHashdTag(fullName: string): Promise<ethers.ContractTransactionResponse> {
+    if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
+    return await this.contracts.accountRegistry.detachHashdTag(fullName);
+  }
+
+  /**
+   * Attach a HashdTag to a bare account
+   */
+  async attachHashdTag(fullName: string, bareAccountPublicKey: string): Promise<ethers.ContractTransactionResponse> {
+    if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
+    return await this.contracts.accountRegistry.attachHashdTag(fullName, bareAccountPublicKey);
+  }
+
+  /**
+   * Transfer a HashdTag NFT to another address
+   */
+  async transferHashdTag(fromAddress: string, toAddress: string, tokenId: string): Promise<ethers.ContractTransactionResponse> {
+    if (!this.signer) throw new Error('Signer not initialized');
+    
+    const hashdTag = new ethers.Contract(
+      CONTRACT_ADDRESSES.HASHD_TAG,
+      HASHD_TAG_ABI,
+      this.signer
+    );
+    
+    return await hashdTag.transferFrom(fromAddress, toAddress, tokenId);
   }
 }
 
