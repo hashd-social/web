@@ -2020,23 +2020,58 @@ export class ContractService {
    * Detach a HashdTag from an account
    */
   async detachHashdTag(fullName: string): Promise<ethers.ContractTransactionResponse> {
-    if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
-    return await this.contracts.accountRegistry.detachHashdTag(fullName);
+    // Ensure we have a signer - try to get it if not available
+    if (!this.signer) {
+      console.log('🔄 Signer not available, attempting to reconnect...');
+      const connected = await this.connect();
+      if (!connected || !this.signer) {
+        throw new Error('Failed to connect wallet. Please ensure MetaMask is connected and try again.');
+      }
+    }
+    
+    const accountRegistry = new ethers.Contract(
+      CONTRACT_ADDRESSES.ACCOUNT_REGISTRY,
+      ACCOUNT_REGISTRY_ABI,
+      this.signer
+    );
+    
+    return await accountRegistry.detachHashdTag(fullName);
   }
 
   /**
    * Attach a HashdTag to a bare account
    */
   async attachHashdTag(fullName: string, bareAccountPublicKey: string): Promise<ethers.ContractTransactionResponse> {
-    if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
-    return await this.contracts.accountRegistry.attachHashdTag(fullName, bareAccountPublicKey);
+    // Ensure we have a signer - try to get it if not available
+    if (!this.signer) {
+      console.log('🔄 Signer not available, attempting to reconnect...');
+      const connected = await this.connect();
+      if (!connected || !this.signer) {
+        throw new Error('Failed to connect wallet. Please ensure MetaMask is connected and try again.');
+      }
+    }
+    
+    const accountRegistry = new ethers.Contract(
+      CONTRACT_ADDRESSES.ACCOUNT_REGISTRY,
+      ACCOUNT_REGISTRY_ABI,
+      this.signer
+    );
+    
+    return await accountRegistry.attachHashdTag(fullName, bareAccountPublicKey);
   }
 
   /**
    * Transfer a HashdTag NFT to another address
    */
   async transferHashdTag(fromAddress: string, toAddress: string, tokenId: string): Promise<ethers.ContractTransactionResponse> {
-    if (!this.signer) throw new Error('Signer not initialized');
+    // Ensure we have a signer - try to get it if not available
+    if (!this.signer) {
+      console.log('🔄 Signer not available, attempting to reconnect...');
+      const connected = await this.connect();
+      if (!connected || !this.signer) {
+        throw new Error('Failed to connect wallet. Please ensure MetaMask is connected and try again.');
+      }
+    }
     
     const hashdTag = new ethers.Contract(
       CONTRACT_ADDRESSES.HASHD_TAG,

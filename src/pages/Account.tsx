@@ -51,21 +51,37 @@ export const Account: React.FC<AccountProps> = ({
       
       try {
         
-        // Fetch named accounts with their public keys
+        // Fetch named accounts with their public keys (show all, attached or detached)
         const named = await contractService.getOwnerNamedAccounts(userAddress);
         console.log('📋 Named accounts for wallet:', named);
         
         for (const name of named) {
           try {
-            // Get public key for each named account
-            const publicKey = await contractService.getPublicKeyByName(name);
-            accounts.push({ 
-              name, 
-              type: 'named',
-              publicKey: publicKey // Full public key, no truncation
-            });
+            // Check if the HashdTag is attached
+            const isAttached = await contractService.isHashdTagAttached(name);
+            console.log(`📎 ${name} attached:`, isAttached);
+            
+            if (isAttached) {
+              // Get public key for attached named account
+              const publicKey = await contractService.getPublicKeyByName(name);
+              accounts.push({ 
+                name, 
+                type: 'named',
+                publicKey: publicKey // Full public key, no truncation
+              });
+              console.log(`✅ Added attached named account: ${name} with public key`);
+            } else {
+              // Show detached named account without public key
+              accounts.push({ 
+                name, 
+                type: 'named',
+                publicKey: undefined // No public key when detached
+              });
+              console.log(`⚠️ Added detached named account: ${name} (no public key)`);
+            }
           } catch (error) {
-            console.warn(`Could not fetch public key for ${name}:`, error);
+            console.warn(`Could not fetch info for ${name}:`, error);
+            // Still add the account even if we can't get details
             accounts.push({ name, type: 'named' });
           }
         }
@@ -488,6 +504,11 @@ export const Account: React.FC<AccountProps> = ({
                                     <Edit2 className="w-3.5 h-3.5" />
                                   </button>
                                 </>
+                              )}
+                              {account.type === 'named' && !account.publicKey && (
+                                <span className="text-xs bg-orange-600 text-orange-200 px-2 py-0.5 rounded font-mono">
+                                  DETACHED
+                                </span>
                               )}
                               {isCurrent && (
                                 <span className="text-xs bg-cyan-500 text-white px-2 py-0.5 rounded font-mono font-bold">
