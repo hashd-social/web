@@ -217,11 +217,15 @@ export class SessionKeyManager {
   
   /**
    * Disable session persistence
+   * Clears encrypted storage but keeps session keys in memory
    */
   static disableSessionPersistence(): void {
-    localStorage.removeItem(this.SESSION_PERSISTENCE_KEY);
+    // Set flag to explicitly disabled (not just removed)
+    localStorage.setItem(this.SESSION_PERSISTENCE_KEY, 'false');
+    // Clear all session storage - keys remain in memory only
     sessionStorage.removeItem(this.SESSION_STORAGE_KEY);
-    console.log('🔒 [SessionKeyManager] Persistence flag removed, sessions cleared');
+    sessionStorage.removeItem('hashd_session_keypair'); // Also clear SessionPersistence storage
+    console.log('🔒 [SessionKeyManager] Persistence disabled, all session storage cleared (keys remain in memory)');
   }
   
   /**

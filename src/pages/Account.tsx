@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Shield, Key, Wallet, Inbox, Info, Hash, Edit2, Check, X, Image as ImageIcon } from 'lucide-react';
+import { User, Shield, Key, Wallet, Inbox, Info, Hash, Edit2, Check, X, Image as ImageIcon, Copy } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { MailboxInfo, SimpleKeyManager, SimpleCryptoUtils } from '../utils/crypto-simple';
 import { contractService } from '../utils/contracts';
@@ -42,6 +42,24 @@ export const Account: React.FC<AccountProps> = ({
     tokenURI: string;
   }>>([]);
   const [nftsLoading, setNftsLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Helper to abbreviate public key
+  const abbreviateKey = (key: string) => {
+    if (key.length <= 20) return key;
+    return `${key.slice(0, 10)}...${key.slice(-8)}`;
+  };
+
+  // Copy public key to clipboard
+  const copyToClipboard = async (key: string) => {
+    try {
+      await navigator.clipboard.writeText(key);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   // Fetch named and bare accounts from blockchain
   const fetchAccounts = async () => {
@@ -513,14 +531,25 @@ export const Account: React.FC<AccountProps> = ({
                             </div>
                           )}
                           {account.publicKey && (
-                            <div className="text-xs text-gray-500 mt-1 font-mono flex items-start gap-1">
-                              <Hash className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                              <span className="break-all">{account.publicKey}</span>
+                            <div className="text-xs text-gray-500 mt-1 font-mono flex items-center gap-1">
+                              <Hash className="w-3 h-3 flex-shrink-0" />
+                              <span title={account.publicKey}>{abbreviateKey(account.publicKey)}</span>
+                              <button
+                                onClick={() => copyToClipboard(account.publicKey!)}
+                                className="p-0.5 hover:text-cyan-400 transition-colors"
+                                title="Copy public key"
+                              >
+                                {copiedKey === account.publicKey ? (
+                                  <Check className="w-3 h-3 text-green-400" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          {!isCurrent && (
+                          {!isCurrent && account.publicKey && (
                             <button
                               onClick={onSwitchOrCreate}
                               className="text-xs neon-text-cyan hover:text-cyan-300 font-bold px-3 py-1.5 rounded bg-cyan-500/10 hover:border-cyan-500/50 transition-all font-mono"
@@ -602,7 +631,7 @@ export const Account: React.FC<AccountProps> = ({
                   <div>
                     <h4 className="text-sm font-bold text-white mb-1 font-mono">Zero-Knowledge Security</h4>
                     <p className="text-sm text-gray-400 leading-relaxed">
-                      Your PIN and encryption keys are <strong className="text-cyan-400">never stored</strong> anywhere—not in localStorage, sessionStorage, or any database. Keys exist only in memory during your session.
+                      Your PIN is <strong className="text-cyan-400">never stored</strong> anywhere. With session persistence enabled, your encryption key is stored encrypted in sessionStorage using a non-exportable browser key. Without persistence, keys exist only in memory.
                     </p>
                   </div>
                 </div>
@@ -650,23 +679,9 @@ export const Account: React.FC<AccountProps> = ({
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="p-2 bg-cyan-500/10 rounded-lg mt-1">
-                    <Inbox className="w-5 h-5 neon-text-cyan" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white mb-1 font-mono">Blockchain Storage</h4>
-                    <p className="text-sm text-gray-400 leading-relaxed">
-                      All encrypted messages are stored on-chain. No central server can access, censor, or delete your data. Your encryption keys ensure only you can read your messages.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
               <div className="mt-4 p-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg">
                 <p className="text-xs text-cyan-300 leading-relaxed">
-                  <strong className="text-cyan-400">Security Note:</strong> Enable "Session Persistence" in Settings to keep your session active until browser close. Your session key is encrypted using a non-exportable browser key—even with persistence, your PIN and mailbox keys are never stored.
+                  <strong className="text-cyan-400">Tip:</strong> Enable "Session Persistence" in Settings to stay logged in until browser close. Your PIN is never stored—only the encrypted session key.
                 </p>
               </div>
             </div>
