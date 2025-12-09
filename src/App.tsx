@@ -79,6 +79,7 @@ function App() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [modalContext, setModalContext] = useState<'initial' | 'switch' | 'create'>('initial');
   const [mailboxes, setMailboxes] = useState<MailboxInfo[]>([]);
+  const [mailboxesLoaded, setMailboxesLoaded] = useState(false);
   const [currentMailbox, setCurrentMailbox] = useState<MailboxInfo | null>(null);
   const [groupRefreshTrigger, setGroupRefreshTrigger] = useState(0);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
@@ -384,12 +385,31 @@ function App() {
   
   
   // Check for incomplete registrations when wallet connects
+  // This only warns if user has on-chain accounts but NO local mailboxes at all
+  // (truly new device or incomplete registration)
   useEffect(() => {
     const checkIncompleteRegistrations = async () => {
       if (!state.isConnected || !state.userAddress) return;
       
-      // Add a small delay to ensure localStorage has been read
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait until mailboxes have been loaded before checking
+      if (!mailboxesLoaded) {
+        console.log('⏳ Waiting for mailboxes to load before checking incomplete registrations...');
+        return;
+      }
+      
+      // If user already has a keyPair loaded, they've successfully accessed their mailbox
+      if (state.keyPair) {
+        console.log('✅ KeyPair loaded - user has access to mailbox, clearing warnings');
+        setState(prev => prev.warning ? { ...prev, warning: '' } : prev);
+        return;
+      }
+      
+      // If user has local mailboxes, they just need to enter their PIN - not incomplete
+      if (mailboxes.length > 0) {
+        console.log('✅ Local mailboxes exist - user just needs to enter PIN');
+        setState(prev => prev.warning ? { ...prev, warning: '' } : prev);
+        return;
+      }
       
       try {
         console.log('🔍 Checking for incomplete registrations...');
@@ -398,55 +418,34 @@ function App() {
         const hashdTagAccounts = await contractService.getOwnerHashdTags(state.userAddress);
         console.log('Named accounts for wallet:', hashdTagAccounts);
         
-        // If no named accounts, no need to check further
+        // If no named accounts on-chain, nothing to warn about
         if (hashdTagAccounts.length === 0) {
-          console.log('✅ No named accounts found - clearing any warnings');
-          setState(prev => ({
-            ...prev,
-            warning: ''
-          }));
+          console.log('✅ No named accounts found on-chain');
+          setState(prev => prev.warning ? { ...prev, warning: '' } : prev);
           return;
         }
         
-        // Only show warning if there are named accounts but NO local mailboxes
-        // If user has created mailboxes, they've completed registration
-        const localMailboxes = SimpleKeyManager.getMailboxList(state.userAddress);
-        const hasLocalMailboxes = localMailboxes.length > 0;
-        
-        console.log('Local mailboxes count:', localMailboxes.length);
-        console.log('Named accounts count:', hashdTagAccounts.length);
-        
-        if (!hasLocalMailboxes) {
-          console.log('⚠️ Found incomplete registrations:', hashdTagAccounts);
-          setState(prev => ({
-            ...prev,
-            warning: `Found incomplete registration(s): ${hashdTagAccounts.join(', ')}. Please create a mailbox with the same name and PIN to complete the registration.`
-          }));
-        } else {
-          console.log('✅ Named accounts found and mailboxes exist - registration complete');
-          // Clear any existing warning
-          setState(prev => ({
-            ...prev,
-            warning: ''
-          }));
-        }
+        // User has on-chain accounts but no local mailboxes - new device or incomplete
+        console.log('⚠️ On-chain accounts exist but no local mailboxes:', hashdTagAccounts);
+        setState(prev => ({
+          ...prev,
+          warning: `Found on-chain account(s): ${hashdTagAccounts.join(', ')}. To access, click "Switch / Create Mailbox" and enter your PIN to restore your mailbox.`
+        }));
       } catch (error) {
         console.log('Error checking incomplete registrations:', error);
       }
     };
     
     checkIncompleteRegistrations();
-  }, [state.isConnected, state.userAddress, state.keyPair]);
+  }, [state.isConnected, state.userAddress, state.keyPair, mailboxes, mailboxesLoaded]);
   
   
   // Resolve actual account names from public keys
   const resolveMailboxAccountNames = async () => {
     const walletAddr = state.userAddress || zustandWallet;
     const loadedMailboxes = SimpleKeyManager.getMailboxList(walletAddr);
-    console.log('🔍 Resolving account names for mailboxes:', loadedMailboxes);
     
     if (loadedMailboxes.length === 0 || !state.isConnected || !state.userAddress) {
-      console.log('⏭️  Skipping account name resolution - not ready');
       return loadedMailboxes;
     }
     
@@ -515,9 +514,13 @@ function App() {
       return { ...mailbox, name: preservedName };
     });
     
-    // Update localStorage with resolved names
-    localStorage.setItem('hashd_mailboxes', JSON.stringify(resolvedMailboxes));
-    console.log('✅ Updated mailbox names with resolved account names');
+    // Update localStorage with resolved names (use namespaced key)
+    // walletAddr is already defined at the top of this function
+    if (walletAddr) {
+      const mailboxesKey = `hashd_mailboxes_${walletAddr.toLowerCase()}`;
+      localStorage.setItem(mailboxesKey, JSON.stringify(resolvedMailboxes));
+      console.log('✅ Updated mailbox names with resolved account names in:', mailboxesKey);
+    }
     
     return resolvedMailboxes;
   };
@@ -563,6 +566,7 @@ function App() {
     );
     
     setMailboxes(uniqueMailboxes);
+    setMailboxesLoaded(true);
     
     // Update current mailbox based on active keyPair
     // Use explicit keyPair if provided (to avoid race condition with state updates)
