@@ -43,7 +43,7 @@ export const Account: React.FC<AccountProps> = ({
   const fetchAccounts = async () => {
       if (!userAddress) return;
       
-      const accounts: {name: string, type: 'named' | 'bare', publicKey?: string}[] = [];
+      const accounts: {name: string, type: 'named' | 'bare', publicKey?: string, hasHashdTagAttached?: boolean}[] = [];
       
       try {
         // First, fetch all accounts from AccountRegistry (source of truth for active accounts)
@@ -60,7 +60,8 @@ export const Account: React.FC<AccountProps> = ({
               accounts.push({ 
                 name: account.hashdTagName, 
                 type: 'named',
-                publicKey: account.publicKey
+                publicKey: account.publicKey,
+                hasHashdTagAttached: true
               });
               console.log(`✅ Added named account: ${account.hashdTagName}`);
             } else {
@@ -89,7 +90,8 @@ export const Account: React.FC<AccountProps> = ({
               accounts.push({ 
                 name: displayName, 
                 type: 'bare',
-                publicKey: account.publicKey
+                publicKey: account.publicKey,
+                hasHashdTagAttached: false
               });
               console.log(`📝 Added bare account: ${displayName}`);
             }
@@ -235,6 +237,7 @@ export const Account: React.FC<AccountProps> = ({
               isKeyRegistered={isKeyRegistered}
               loading={loading}
               keyPair={keyPair}
+              blockchainAccounts={blockchainAccounts}
               onSetupMailbox={onSetupMailbox}
               onCompleteSetup={onCompleteSetup}
               onSwitchOrCreate={onSwitchOrCreate}

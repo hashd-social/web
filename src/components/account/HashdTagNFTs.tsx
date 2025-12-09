@@ -50,7 +50,7 @@ export const HashdTagNFTs: React.FC<HashdTagNFTsProps> = ({ userAddress, onAccou
         Your HashdTag NFTs ({hashdTagNFTs.length})
       </h3>
       <p className="text-sm text-gray-400 mb-4">
-        Your HashdTag identity NFTs with on-chain metadata and SVG artwork.
+        Your active HASHDtags will reverse-resolve to your public key
       </p>
       
       {nftsLoading ? (

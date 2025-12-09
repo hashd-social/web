@@ -6,13 +6,21 @@
 
 import React, { useState } from 'react';
 import { User, Shield, Inbox, Edit2, Check, X } from 'lucide-react';
-import { MailboxInfo } from '../../utils/crypto-simple';
+import { MailboxInfo, SimpleCryptoUtils } from '../../utils/crypto-simple';
+
+interface BlockchainAccount {
+  name: string;
+  type: 'named' | 'bare';
+  publicKey?: string;
+  hasHashdTagAttached?: boolean;
+}
 
 interface CurrentMailboxProps {
   currentMailbox: MailboxInfo | null;
   isKeyRegistered: boolean;
   loading: boolean;
   keyPair: any;
+  blockchainAccounts: BlockchainAccount[];
   onSetupMailbox: () => void;
   onCompleteSetup: () => void;
   onSwitchOrCreate: () => void;
@@ -24,6 +32,7 @@ export const CurrentMailbox: React.FC<CurrentMailboxProps> = ({
   isKeyRegistered,
   loading,
   keyPair,
+  blockchainAccounts,
   onSetupMailbox,
   onCompleteSetup,
   onSwitchOrCreate,
@@ -31,6 +40,33 @@ export const CurrentMailbox: React.FC<CurrentMailboxProps> = ({
 }) => {
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState('');
+
+  // Find the current account in blockchain accounts to get HashdTag info
+  // Try full public key first, then fall back to publicKeyHash comparison
+  const currentBlockchainAccount = blockchainAccounts.find(acc => {
+    if (!acc.publicKey) return false;
+    
+    // Try direct public key comparison
+    if (currentMailbox?.publicKey) {
+      return acc.publicKey.toLowerCase() === currentMailbox.publicKey.toLowerCase();
+    }
+    
+    // Fall back to hash comparison
+    if (currentMailbox?.publicKeyHash) {
+      const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(acc.publicKey);
+      const accountHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+      return currentMailbox.publicKeyHash === accountHash;
+    }
+    
+    return false;
+  }) || null;
+  
+  // Use HashdTag name if attached, otherwise use local mailbox name
+  const displayName = currentBlockchainAccount?.hasHashdTagAttached 
+    ? currentBlockchainAccount.name 
+    : currentMailbox?.name || 'Unknown';
+  
+  const hasHashdTag = currentBlockchainAccount?.hasHashdTagAttached || false;
 
   const handleStartRename = () => {
     if (currentMailbox) {
@@ -105,15 +141,22 @@ export const CurrentMailbox: React.FC<CurrentMailboxProps> = ({
               ) : (
                 <>
                   <span className="text-sm font-bold text-white font-mono">
-                    {currentMailbox.name}
+                    {displayName}
                   </span>
-                  <button
-                    onClick={handleStartRename}
-                    className="p-1.5 text-gray-400 hover:text-cyan-400 transition-colors"
-                    title="Rename mailbox"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
+                  {hasHashdTag && (
+                    <span className="px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/30 rounded text-xs font-mono neon-text-cyan">
+                      HASHDTAG
+                    </span>
+                  )}
+                  {!hasHashdTag && (
+                    <button
+                      onClick={handleStartRename}
+                      className="p-1.5 text-gray-400 hover:text-cyan-400 transition-colors"
+                      title="Rename mailbox"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </>
               )}
             </div>
