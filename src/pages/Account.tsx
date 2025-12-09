@@ -46,69 +46,54 @@ export const Account: React.FC<AccountProps> = ({
       const accounts: {name: string, type: 'named' | 'bare', publicKey?: string}[] = [];
       
       try {
+        // First, fetch all accounts from AccountRegistry (source of truth for active accounts)
+        const accountCount = await contractService.getAccountCount(userAddress);
+        console.log('📊 Total account count from contract:', accountCount);
         
-        // Fetch HashdTags with their public keys (show all, attached or detached)
-        const hashdTags = await contractService.getOwnerHashdTags(userAddress);
-        console.log('📋 HashdTags for wallet:', hashdTags);
-        
-        for (const name of hashdTags) {
-          try {
-            // Check if the HashdTag is attached
-            const isAttached = await contractService.isHashdTagAttached(name);
-            console.log(`📎 ${name} attached:`, isAttached);
-            
-            if (isAttached) {
-              // Get public key for attached named account
-              const publicKey = await contractService.getPublicKeyByName(name);
-              accounts.push({ 
-                name, 
-                type: 'named',
-                publicKey: publicKey // Full public key, no truncation
-              });
-              console.log(`✅ Added attached named account: ${name} with public key`);
-            } else {
-              // Show detached named account without public key
-              accounts.push({ 
-                name, 
-                type: 'named',
-                publicKey: undefined // No public key when detached
-              });
-              console.log(`⚠️ Added detached named account: ${name} (no public key)`);
-            }
-          } catch (error) {
-            console.warn(`Could not fetch info for ${name}:`, error);
-            // Still add the account even if we can't get details
-            accounts.push({ name, type: 'named' });
-          }
-        }
-        
-        // Fetch all accounts (including those without HashdTags)
-        try {
-          const accountCount = await contractService.getAccountCount(userAddress);
-          console.log('📊 Total account count from contract:', accountCount);
+        for (let i = 0; i < accountCount; i++) {
+          const account = await contractService.getAccount(userAddress, i);
+          console.log(`  [${i}] ${account.isActive ? '✅ ACTIVE' : '❌ INACTIVE'} hasHashdTag: ${account.hasHashdTagAttached} - publicKey:`, account.publicKey);
           
-          for (let i = 0; i < accountCount; i++) {
-            const account = await contractService.getAccount(userAddress, i);
-            console.log(`  [${i}] ${account.isActive ? '✅ ACTIVE' : '❌ INACTIVE'} - publicKey:`, account.publicKey);
-            
-            if (account.isActive && !account.hasHashdTagAttached) {
-              // Account without HashdTag - match with localStorage mailbox to get custom name
+          if (account.isActive) {
+            if (account.hasHashdTagAttached && account.hashdTagName) {
+              // Named account with attached HashdTag
+              accounts.push({ 
+                name: account.hashdTagName, 
+                type: 'named',
+                publicKey: account.publicKey
+              });
+              console.log(`✅ Added named account: ${account.hashdTagName}`);
+            } else {
+              // Bare account (no HashdTag attached)
               const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
               const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
               const localMailbox = mailboxes.find(m => m.publicKeyHash === publicKeyHash);
               
-              const displayName = localMailbox?.name || `Account ${i + 1}`;
+              // If localStorage has a HashdTag-style name (contains @) but blockchain says it's bare,
+              // the HashdTag was detached - update localStorage to show "Bare Account"
+              let displayName = localMailbox?.name || 'Bare Account';
+              if (localMailbox?.name && localMailbox.name.includes('@')) {
+                console.log(`🔄 Clearing stale HashdTag name "${localMailbox.name}" from localStorage`);
+                displayName = 'Bare Account';
+                // Update localStorage to clear the stale name
+                const allMailboxes = SimpleKeyManager.getMailboxList(userAddress);
+                const updated = allMailboxes.map(m => 
+                  m.publicKeyHash === publicKeyHash 
+                    ? { ...m, name: 'Bare Account' }
+                    : m
+                );
+                const mailboxesKey = `hashd_mailboxes_${userAddress.toLowerCase()}`;
+                localStorage.setItem(mailboxesKey, JSON.stringify(updated));
+              }
               
               accounts.push({ 
                 name: displayName, 
-                type: 'bare' as const,
+                type: 'bare',
                 publicKey: account.publicKey
               });
-              console.log(`  📝 Using name from localStorage: ${displayName}`);
+              console.log(`📝 Added bare account: ${displayName}`);
             }
           }
-        } catch (error) {
-          console.error('❌ Error fetching accounts:', error);
         }
         
       } catch (error) {
@@ -264,7 +249,7 @@ export const Account: React.FC<AccountProps> = ({
               onRename={handleRename}
             />
 
-            <HashdTagNFTs userAddress={userAddress} />
+            <HashdTagNFTs userAddress={userAddress} onAccountsChanged={fetchAccounts} />
           </div>
 
           {/* Right Column - How It Works */}

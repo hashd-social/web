@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Image as ImageIcon, Link2, Unlink, Send, AlertCircle } from 'lucide-react';
 import { contractService } from '../utils/contracts';
 import { ethers } from 'ethers';
+import { AttachHashdTagModal } from './modals/AttachHashdTagModal';
 
 interface HashdTagNFTCardProps {
   tokenId: string;
@@ -39,6 +40,7 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [transferAddress, setTransferAddress] = useState('');
   const [showTransferInput, setShowTransferInput] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
 
   useEffect(() => {
     const loadMetadata = async () => {
@@ -102,42 +104,9 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
     }
   };
 
-  const handleAttach = async () => {
-    try {
-      setProcessing(true);
-      setError(null);
-      
-      // Get accounts and find one without a HashdTag attached
-      const accountCount = await contractService.getAccountCount(userAddress);
-      if (accountCount === 0) {
-        throw new Error('No account found. Please create an account first.');
-      }
-      
-      // Find an active account without a HashdTag attached
-      let publicKey = '';
-      for (let i = 0; i < accountCount; i++) {
-        const account = await contractService.getAccount(userAddress, i);
-        if (account.isActive && !account.hasHashdTagAttached) {
-          publicKey = account.publicKey;
-          break;
-        }
-      }
-      
-      if (!publicKey) {
-        throw new Error('No available account found to attach HashdTag. All accounts already have HashdTags attached.');
-      }
-      
-      const tx = await contractService.attachHashdTag(fullName, publicKey);
-      await tx.wait();
-      
-      setIsAttached(true);
-      if (onRefresh) onRefresh();
-    } catch (error: any) {
-      console.error('Error attaching HashdTag:', error);
-      setError(error.message || 'Failed to attach HashdTag');
-    } finally {
-      setProcessing(false);
-    }
+  const handleAttachSuccess = () => {
+    setIsAttached(true);
+    if (onRefresh) onRefresh();
   };
 
   const handleTransfer = async () => {
@@ -216,11 +185,11 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
                 ...
               </div>
             ) : isAttached ? (
-              <div className="px-2 py-1 bg-green-500/20 border border-green-500/50 rounded text-xs font-bold font-mono text-green-400">
+              <div className="px-2 py-1 bg-black border border-green-500/50 rounded text-xs font-bold font-mono text-green-400">
                 ACTIVE
               </div>
             ) : (
-              <div className="px-2 py-1 bg-orange-500/20 border border-orange-500/50 rounded text-xs font-bold font-mono text-orange-400">
+              <div className="px-2 py-1 bg-black border border-orange-500/50 rounded text-xs font-bold font-mono text-orange-400">
                 INACTIVE
               </div>
             )}
@@ -275,12 +244,12 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
               </button>
             ) : (
               <button
-                onClick={handleAttach}
+                onClick={() => setShowAttachModal(true)}
                 disabled={processing}
                 className="w-full px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg border border-green-500/30 hover:border-green-500/50 transition-all text-xs font-bold font-mono uppercase flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Link2 className="w-4 h-4" />
-                {processing ? 'Attaching...' : 'Attach'}
+                Attach
               </button>
             )}
             
@@ -328,6 +297,14 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
         </div>
       </div>
 
+      {/* Attach Account Selection Modal */}
+      <AttachHashdTagModal
+        isOpen={showAttachModal}
+        onClose={() => setShowAttachModal(false)}
+        fullName={fullName}
+        userAddress={userAddress}
+        onSuccess={handleAttachSuccess}
+      />
     </>
   );
 };

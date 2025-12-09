@@ -18,9 +18,10 @@ interface HashdTagNFT {
 
 interface HashdTagNFTsProps {
   userAddress: string;
+  onAccountsChanged?: () => void;
 }
 
-export const HashdTagNFTs: React.FC<HashdTagNFTsProps> = ({ userAddress }) => {
+export const HashdTagNFTs: React.FC<HashdTagNFTsProps> = ({ userAddress, onAccountsChanged }) => {
   const [hashdTagNFTs, setHashdTagNFTs] = useState<HashdTagNFT[]>([]);
   const [nftsLoading, setNftsLoading] = useState(false);
 
@@ -46,7 +47,7 @@ export const HashdTagNFTs: React.FC<HashdTagNFTsProps> = ({ userAddress }) => {
     <div className="bg-gray-800/50 rounded-lg p-6">
       <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono flex items-center gap-2">
         <ImageIcon className="w-5 h-5" />
-        HashdTag NFTs ({hashdTagNFTs.length})
+        Your HashdTag NFTs ({hashdTagNFTs.length})
       </h3>
       <p className="text-sm text-gray-400 mb-4">
         Your HashdTag identity NFTs with on-chain metadata and SVG artwork.
@@ -72,7 +73,10 @@ export const HashdTagNFTs: React.FC<HashdTagNFTsProps> = ({ userAddress }) => {
               domain={nft.domain}
               tokenURI={nft.tokenURI}
               userAddress={userAddress}
-              onRefresh={fetchNFTs}
+              onRefresh={() => {
+                fetchNFTs();
+                if (onAccountsChanged) onAccountsChanged();
+              }}
             />
           ))}
         </div>
