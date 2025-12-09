@@ -200,10 +200,11 @@ export class SessionKeyManager {
   }
   
   /**
-   * Check if session persistence is enabled
+   * Check if session persistence is enabled (default: true)
    */
   static isSessionPersistenceEnabled(): boolean {
-    return localStorage.getItem(this.SESSION_PERSISTENCE_KEY) === 'true';
+    // Default to true - only disabled if explicitly set to 'false'
+    return localStorage.getItem(this.SESSION_PERSISTENCE_KEY) !== 'false';
   }
   
   /**
