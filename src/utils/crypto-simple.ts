@@ -734,7 +734,7 @@ export class SimpleKeyManager {
     pin: string
   ): Promise<CryptoKeyPair> {
     // Create deterministic message with PIN
-    const keyDerivationMessage = `HASHD Mailbox Creation v4\nAddress: ${userAddress}\nPIN: ${pin}\nAlgorithm: AES-256-GCM-ECDH`;
+    const keyDerivationMessage = `HASHD Mailbox Creation v1\nAddress: ${userAddress}\nPIN: ${pin}\nAlgorithm: AES-256-GCM-ECDH`;
     console.log('🔐 Signing message for deterministic key derivation');
     
     const signature = await signer.signMessage(keyDerivationMessage);

@@ -250,66 +250,53 @@ export const SendMessage: React.FC<SendMessageProps> = ({
         const isRegistered = await contractService.isKeyRegistered(input);
         
         if (isRegistered) {
-          // Look up named accounts owned by this wallet
+          // Look up active accounts owned by this wallet
           try {
-            const namedAccounts = await contractService.getOwnerHashdTags(input);
-            setAvailableAccounts(namedAccounts);
+            const accounts = await contractService.getAccounts(input);
+            // Filter for active accounts and build display names
+            const activeAccounts = accounts
+              .filter(acc => acc.isActive)
+              .map(acc => acc.hasHashdTagAttached ? acc.hashdTagName : `Bare Account (${acc.publicKey.slice(0, 10)}...)`);
             
-            // If there are named accounts, use the first one by default
-            if (namedAccounts.length > 0) {
-              setSelectedAccount(namedAccounts[0]);
-              const [accName, domain] = namedAccounts[0].split('@');
-              
-              // Get public key from AccountRegistry for this named account
-              const publicKey = await contractService.getPublicKeyByName(namedAccounts[0]);
-              
-              setRecipientInfo({
-                publicKey: publicKey,
-                walletAddress: input,
-                accountName: accName,
-                domain: domain
-              });
-              
-              // Check if same wallet
-              const sameWallet = input.toLowerCase() === userAddress.toLowerCase();
-              setIsSameWallet(sameWallet);
-            } else {
-              // No named accounts, try to get bare account public key
-              try {
-                const barePublicKey = await contractService.getPublicKeyByAddress(input);
-                setRecipientInfo({
-                  publicKey: barePublicKey,
-                  walletAddress: input,
-                  accountName: 'Bare Address',
-                  domain: 'wallet'
-                });
+            setAvailableAccounts(activeAccounts);
+            
+            // If there are active accounts, use the first one by default
+            if (activeAccounts.length > 0) {
+              const firstAccount = accounts.find(acc => acc.isActive);
+              if (firstAccount) {
+                setSelectedAccount(activeAccounts[0]);
+                
+                if (firstAccount.hasHashdTagAttached) {
+                  const [accName, domain] = firstAccount.hashdTagName.split('@');
+                  setRecipientInfo({
+                    publicKey: firstAccount.publicKey,
+                    walletAddress: input,
+                    accountName: accName,
+                    domain: domain
+                  });
+                } else {
+                  setRecipientInfo({
+                    publicKey: firstAccount.publicKey,
+                    walletAddress: input,
+                    accountName: 'Bare Account',
+                    domain: 'wallet'
+                  });
+                }
                 
                 // Check if same wallet
                 const sameWallet = input.toLowerCase() === userAddress.toLowerCase();
                 setIsSameWallet(sameWallet);
-              } catch (bareError) {
-                console.warn('Could not fetch bare account public key:', bareError);
-                setRecipientKeyValid(false);
-                setRecipientInfo(null);
               }
-            }
-          } catch (error) {
-            console.warn('Could not fetch named accounts for wallet:', error);
-            setAvailableAccounts([]);
-            // Try bare account as fallback
-            try {
-              const barePublicKey = await contractService.getPublicKeyByAddress(input);
-              setRecipientInfo({
-                publicKey: barePublicKey,
-                walletAddress: input,
-                accountName: 'Unknown',
-                domain: 'wallet'
-              });
-            } catch (bareError) {
-              console.warn('Could not fetch bare account public key:', bareError);
+            } else {
+              // No active accounts
               setRecipientKeyValid(false);
               setRecipientInfo(null);
             }
+          } catch (error) {
+            console.warn('Could not fetch accounts for wallet:', error);
+            setAvailableAccounts([]);
+            setRecipientKeyValid(false);
+            setRecipientInfo(null);
           }
         } else {
           setRecipientInfo(null);
@@ -351,32 +338,51 @@ export const SendMessage: React.FC<SendMessageProps> = ({
     return () => clearTimeout(timeoutId);
   }, [recipient]);
 
-  const handleAccountSelection = async (accountAddress: string) => {
-    setSelectedAccount(accountAddress);
+  const handleAccountSelection = async (accountDisplayName: string) => {
+    setSelectedAccount(accountDisplayName);
     setLoadingAccountSelection(true);
     
     try {
-      const publicKey = await contractService.getPublicKeyByName(accountAddress);
-      const [accName, domain] = accountAddress.split('@');
-      
-      // Get the wallet address from AccountRegistry
-      let walletAddress = recipient; // Fallback to input value
-      try {
-        const accountData = await contractService.getHashdTagAccount(accountAddress);
-        walletAddress = accountData.owner;
-        console.log('✅ Got wallet address for HashdTag account:', walletAddress);
-      } catch (error) {
-        console.warn('Could not get wallet address from AccountRegistry, using input value');
+      // Check if this is a HashdTag account (contains @) or a bare account
+      if (accountDisplayName.includes('@')) {
+        // HashdTag account
+        const publicKey = await contractService.getPublicKeyByName(accountDisplayName);
+        const [accName, domain] = accountDisplayName.split('@');
+        
+        // Get the wallet address from AccountRegistry
+        let walletAddress = recipient; // Fallback to input value
+        try {
+          const accountData = await contractService.getHashdTagAccount(accountDisplayName);
+          walletAddress = accountData.owner;
+        } catch (error) {
+          console.warn('Could not get wallet address from AccountRegistry, using input value');
+        }
+        
+        setRecipientInfo({
+          publicKey,
+          walletAddress,
+          accountName: accName,
+          domain: domain
+        });
+      } else {
+        // Bare account - extract public key prefix from display name and find matching account
+        const accounts = await contractService.getAccounts(recipient);
+        const publicKeyPrefix = accountDisplayName.match(/\(0x[a-fA-F0-9]+\.\.\.\)/)?.[0]?.slice(1, -4) || '';
+        const matchingAccount = accounts.find(acc => 
+          acc.isActive && !acc.hasHashdTagAttached && acc.publicKey.startsWith(publicKeyPrefix)
+        );
+        
+        if (matchingAccount) {
+          setRecipientInfo({
+            publicKey: matchingAccount.publicKey,
+            walletAddress: recipient,
+            accountName: 'Bare Account',
+            domain: 'wallet'
+          });
+        }
       }
-      
-      setRecipientInfo({
-        publicKey,
-        walletAddress,
-        accountName: accName,
-        domain: domain
-      });
     } catch (error) {
-      console.error('Error getting named account public key:', error);
+      console.error('Error getting account public key:', error);
     } finally {
       setLoadingAccountSelection(false);
     }
@@ -965,7 +971,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
       <div className="mb-6">
         <label className="text-xs font-bold neon-text-cyan uppercase tracking-wider mb-3 block font-mono flex items-center gap-2">
           <div className="w-1 h-4 bg-cyan-500 rounded-full"></div>
-          {replyThreadId ? 'Thread Participants' : 'Recipient Address *'}
+          {replyThreadId ? 'Thread Participants' : 'Recipient Wallet or HASHDtag *'}
         </label>
         {replyThreadId ? (
           <div className="px-4 py-3 bg-gray-900/50 border border-cyan-500/30 rounded-lg">
@@ -1022,7 +1028,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
           >
             <p className="text-sm text-white font-mono">
               {recipient.includes('@') 
-                ? 'This account does not exist or has no registered encryption key. Please check the address and try again.'
+                ? 'This account does not exist or the HASHDtag is not linked to an encryption key. Please try another address.'
                 : 'This wallet address has not registered their encryption key. They need to create a mailbox first.'
               }
             </p>
@@ -1047,9 +1053,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
                 <p className="text-sm text-red-200 font-bold">
                   ⚠️ You cannot send messages to different mailboxes on the same wallet.
                 </p>
-                <p className="text-xs text-red-300 mt-2">
-                  Please send to a different wallet address.
-                </p>
+      
               </div>
             </div>
           </MatrixNotify>
