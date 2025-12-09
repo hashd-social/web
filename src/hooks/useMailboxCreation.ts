@@ -112,23 +112,23 @@ export const useMailboxCreation = () => {
   ): Promise<{ success: boolean; error?: string }> => {
     const steps = [
       {
-        title: 'Generate Keys',
-        description: 'Creating encryption keys from PIN and wallet signature',
+        title: 'Derive Keys',
+        description: 'Sign in wallet to generate your encryption keys',
         status: 'active' as const,
       },
       {
-        title: 'Check Availability',
-        description: accountName && domain ? `Checking ${accountName}@${domain} status` : 'Checking PIN uniqueness',
+        title: 'Verify',
+        description: accountName && domain ? `Check ${accountName}@${domain} availability` : 'Ensure keys are unique',
         status: 'pending' as const,
       },
       {
-        title: 'Register Account',
-        description: accountName && domain ? `Registering ${accountName}@${domain} on blockchain` : 'Saving mailbox locally',
+        title: 'Create Account',
+        description: accountName && domain ? `Transaction: Register ${accountName}@${domain}` : 'Transaction: Create account on-chain',
         status: 'pending' as const,
       },
       {
-        title: 'Register Keys',
-        description: 'Registering public key on KeyRegistry',
+        title: 'Link Keys',
+        description: 'Transaction: Store public key on-chain',
         status: 'pending' as const,
       },
     ];
