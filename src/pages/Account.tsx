@@ -51,11 +51,11 @@ export const Account: React.FC<AccountProps> = ({
       
       try {
         
-        // Fetch named accounts with their public keys (show all, attached or detached)
-        const named = await contractService.getOwnerNamedAccounts(userAddress);
-        console.log('📋 Named accounts for wallet:', named);
+        // Fetch HashdTags with their public keys (show all, attached or detached)
+        const hashdTags = await contractService.getOwnerHashdTags(userAddress);
+        console.log('📋 HashdTags for wallet:', hashdTags);
         
-        for (const name of named) {
+        for (const name of hashdTags) {
           try {
             // Check if the HashdTag is attached
             const isAttached = await contractService.isHashdTagAttached(name);
@@ -86,43 +86,33 @@ export const Account: React.FC<AccountProps> = ({
           }
         }
         
-        // Fetch all bare accounts with full public keys
+        // Fetch all accounts (including those without HashdTags)
         try {
-          // First check the count
-          const bareCount = await contractService.getBareAccountCount(userAddress);
-          console.log('📊 Bare account count from contract:', bareCount);
+          const accountCount = await contractService.getAccountCount(userAddress);
+          console.log('📊 Total account count from contract:', accountCount);
           
-          const bareAccounts = await contractService.getBareAccounts(userAddress);
-          console.log('📋 Raw bare accounts result:', bareAccounts);
-          console.log('📊 Total bare accounts on-chain:', bareAccounts.publicKeys.length);
-          
-          bareAccounts.publicKeys.forEach((publicKey, index) => {
-            const isActive = bareAccounts.isActives[index];
-            console.log(`  [${index}] ${isActive ? '✅ ACTIVE' : '❌ INACTIVE'} - publicKey:`, publicKey);
+          for (let i = 0; i < accountCount; i++) {
+            const account = await contractService.getAccount(userAddress, i);
+            console.log(`  [${i}] ${account.isActive ? '✅ ACTIVE' : '❌ INACTIVE'} - publicKey:`, account.publicKey);
             
-            if (isActive) {
-              // Match with localStorage mailbox to get custom name
-              const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(publicKey);
+            if (account.isActive && !account.hasHashdTagAttached) {
+              // Account without HashdTag - match with localStorage mailbox to get custom name
+              const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
               const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
               const localMailbox = mailboxes.find(m => m.publicKeyHash === publicKeyHash);
               
-              const displayName = localMailbox?.name || `Bare Account ${index + 1}`;
+              const displayName = localMailbox?.name || `Account ${i + 1}`;
               
-              const account = { 
+              accounts.push({ 
                 name: displayName, 
                 type: 'bare' as const,
-                publicKey: publicKey
-              };
+                publicKey: account.publicKey
+              });
               console.log(`  📝 Using name from localStorage: ${displayName}`);
-              accounts.push(account);
             }
-          });
-          
-          const activeCount = bareAccounts.isActives.filter(Boolean).length;
-          const inactiveCount = bareAccounts.publicKeys.length - activeCount;
-          console.log(`📊 Active: ${activeCount}, Inactive: ${inactiveCount}`);
+          }
         } catch (error) {
-          console.error('❌ Error fetching bare accounts:', error);
+          console.error('❌ Error fetching accounts:', error);
         }
         
       } catch (error) {
@@ -142,15 +132,15 @@ export const Account: React.FC<AccountProps> = ({
     const localMailboxes = SimpleKeyManager.getMailboxList(userAddress);
     console.log('📦 Local mailboxes:', localMailboxes.length);
     
-    // Get all on-chain accounts
-    const namedAccounts = await contractService.getOwnerNamedAccounts(userAddress);
-    const bareAccounts = await contractService.getBareAccounts(userAddress);
+    // Get all on-chain accounts using unified model
+    const hashdTags = await contractService.getOwnerHashdTags(userAddress);
+    const accountCount = await contractService.getAccountCount(userAddress);
     
     // Build set of valid public key hashes from blockchain
     const validHashes = new Set<string>();
     
-    // Add named accounts
-    for (const name of namedAccounts) {
+    // Add HashdTag accounts
+    for (const name of hashdTags) {
       try {
         const publicKey = await contractService.getPublicKeyByName(name);
         const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(publicKey);
@@ -161,14 +151,19 @@ export const Account: React.FC<AccountProps> = ({
       }
     }
     
-    // Add bare accounts
-    bareAccounts.publicKeys.forEach((publicKey, index) => {
-      if (bareAccounts.isActives[index]) {
-        const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(publicKey);
-        const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
-        validHashes.add(publicKeyHash);
+    // Add all accounts (including those without HashdTags)
+    for (let i = 0; i < accountCount; i++) {
+      try {
+        const account = await contractService.getAccount(userAddress, i);
+        if (account.isActive) {
+          const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
+          const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+          validHashes.add(publicKeyHash);
+        }
+      } catch (error) {
+        console.warn(`Could not get account at index ${i}:`, error);
       }
-    });
+    }
     
     console.log('✅ Valid hashes from blockchain:', validHashes.size);
     
@@ -194,8 +189,8 @@ export const Account: React.FC<AccountProps> = ({
       
       const attemptFetch = async () => {
         try {
-          const bareCount = await contractService.getBareAccountCount(userAddress);
-          console.log(`✅ Contracts ready, bare count: ${bareCount}`);
+          const accountCount = await contractService.getAccountCount(userAddress);
+          console.log(`✅ Contracts ready, account count: ${accountCount}`);
           await fetchAccounts();
           await syncMailboxes(); // Sync after fetching
         } catch (error: any) {

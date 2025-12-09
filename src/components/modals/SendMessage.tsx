@@ -180,10 +180,10 @@ export const SendMessage: React.FC<SendMessageProps> = ({
           // Try to get full account data for wallet address
           let walletAddress = 'Unknown';
           try {
-            // Check if it's a named account (contains @)
+            // Check if it's a HashdTag account (contains @)
             // Contract stores accounts as "name@domain" format
             if (input.includes('@')) {
-              const accountData = await contractService.getNamedAccount(input);
+              const accountData = await contractService.getHashdTagAccount(input);
               walletAddress = accountData.owner;
               
               if (!accountData.isActive) {
@@ -192,10 +192,24 @@ export const SendMessage: React.FC<SendMessageProps> = ({
                 return;
               }
             } else {
-              // It's a bare address (wallet address)
+              // It's a wallet address - check if they have any active account
               walletAddress = input;
-              const bareAccount = await contractService.getBareAccount(input);
-              if (!bareAccount.isActive) {
+              const accountCount = await contractService.getAccountCount(input);
+              if (accountCount === 0) {
+                setRecipientKeyValid(false);
+                setRecipientInfo(null);
+                return;
+              }
+              // Check if at least one account is active
+              let hasActiveAccount = false;
+              for (let i = 0; i < accountCount; i++) {
+                const account = await contractService.getAccount(input, i);
+                if (account.isActive) {
+                  hasActiveAccount = true;
+                  break;
+                }
+              }
+              if (!hasActiveAccount) {
                 setRecipientKeyValid(false);
                 setRecipientInfo(null);
                 return;
@@ -238,7 +252,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
         if (isRegistered) {
           // Look up named accounts owned by this wallet
           try {
-            const namedAccounts = await contractService.getOwnerNamedAccounts(input);
+            const namedAccounts = await contractService.getOwnerHashdTags(input);
             setAvailableAccounts(namedAccounts);
             
             // If there are named accounts, use the first one by default
@@ -348,9 +362,9 @@ export const SendMessage: React.FC<SendMessageProps> = ({
       // Get the wallet address from AccountRegistry
       let walletAddress = recipient; // Fallback to input value
       try {
-        const accountData = await contractService.getNamedAccount(accountAddress);
+        const accountData = await contractService.getHashdTagAccount(accountAddress);
         walletAddress = accountData.owner;
-        console.log('✅ Got wallet address for named account:', walletAddress);
+        console.log('✅ Got wallet address for HashdTag account:', walletAddress);
       } catch (error) {
         console.warn('Could not get wallet address from AccountRegistry, using input value');
       }

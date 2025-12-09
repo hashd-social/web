@@ -72,24 +72,24 @@ export const useMailboxCreation = () => {
   ): Promise<{ needsRecovery: boolean; publicKey?: string; fullName?: string }> => {
     try {
       const fullName = `${accountName}@${domain}`;
-      const namedAccount = await contractService.getNamedAccount(fullName);
+      const hashdTagAccount = await contractService.getHashdTagAccount(fullName);
 
-      if (!namedAccount.isActive || namedAccount.owner === ethers.ZeroAddress) {
+      if (!hashdTagAccount.isActive || hashdTagAccount.owner === ethers.ZeroAddress) {
         return { needsRecovery: false };
       }
 
-      if (namedAccount.owner.toLowerCase() !== address.toLowerCase()) {
+      if (hashdTagAccount.owner.toLowerCase() !== address.toLowerCase()) {
         throw new Error(
-          `Account ${fullName} is owned by a different wallet (${namedAccount.owner}). This may indicate front-running or the name was already taken.`
+          `Account ${fullName} is owned by a different wallet (${hashdTagAccount.owner}). This may indicate front-running or the name was already taken.`
         );
       }
 
-      const keyExists = await contractService.hasKey(address, namedAccount.publicKey);
+      const keyExists = await contractService.hasKey(address, hashdTagAccount.publicKey);
 
       if (!keyExists) {
         return {
           needsRecovery: true,
-          publicKey: namedAccount.publicKey,
+          publicKey: hashdTagAccount.publicKey,
           fullName,
         };
       }
@@ -272,9 +272,9 @@ export const useMailboxCreation = () => {
             : null
         );
 
-        // Register named account with retry
+        // Register account with HashdTag with retry
         const namedTx = await retryTransaction(() => 
-          contractService.registerNamedAccount(
+          contractService.registerAccountWithHashdTag(
             accountName,
             domain,
             keyHex,
@@ -282,7 +282,7 @@ export const useMailboxCreation = () => {
           )
         );
         
-        console.log('⏳ Waiting for NamedAccountRegistered event...');
+        console.log('⏳ Waiting for AccountWithHashdTagRegistered event...');
         const receipt = await namedTx.wait();
         
         if (!receipt || receipt.status !== 1) {

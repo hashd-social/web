@@ -58,37 +58,33 @@ export const HASHD_ABI = [
 ];
 
 export const ACCOUNT_REGISTRY_ABI = [
-  // Bare account functions (FREE, multiple per address)
-  "function registerBareAccount(bytes publicKey)",
-  "function updateBareAccountKey(uint256 index, bytes newPublicKey)",
-  "function getBareAccount(address owner) view returns (bytes publicKey, uint256 timestamp, bool isActive)",
-  "function getBareAccounts(address owner) view returns (bytes[] publicKeys, uint256[] timestamps, bool[] isActives)",
-  "function getBareAccountAtIndex(address owner, uint256 index) view returns (bytes publicKey, uint256 timestamp, bool isActive)",
-  "function getBareAccountCount(address owner) view returns (uint256)",
-  "function getPublicKeyByAddress(address owner) view returns (bytes)",
-  "function hasBareAccount(address owner) view returns (bool)",
-  "function deactivateBareAccount(uint256 index)",
+  // Unified account functions
+  "function registerAccount(bytes publicKey)",
+  "function registerAccountWithHashdTag(string name, string domain, bytes publicKey) payable",
+  "function updateAccountKey(uint256 index, bytes newPublicKey)",
+  "function updateHashdTagAccountKey(string fullName, bytes newPublicKey)",
+  "function getAccount(address owner, uint256 index) view returns (bytes publicKey, uint256 createdAt, bool isActive, bool hasHashdTagAttached, string hashdTagName, uint256 hashdTagTokenId)",
+  "function getAccounts(address owner) view returns (tuple(bytes publicKey, uint256 createdAt, bool isActive, bool hasHashdTagAttached, string hashdTagName, uint256 hashdTagTokenId)[])",
+  "function getAccountCount(address owner) view returns (uint256)",
+  "function hasAccount(address owner) view returns (bool)",
   
-  // Named account functions (FIRST FREE, then tiered pricing)
-  "function registerNamedAccount(string _name, string _domain, bytes _publicKey) payable",
-  "function updateNamedAccountKey(string fullName, bytes newPublicKey)",
-  "function getNamedAccount(string fullName) view returns (bytes publicKey, address owner, uint256 timestamp, bool isActive)",
+  // HashdTag functions
+  "function getHashdTagAccount(string fullName) view returns (bytes publicKey, address owner, uint256 timestamp, bool isActive)",
   "function getPublicKeyByName(string fullName) view returns (bytes)",
   "function isNameAvailable(string name, string domain) view returns (bool)",
-  "function getOwnerNamedAccounts(address owner) view returns (string[])",
-  "function getPrimaryNamedAccount(address owner) view returns (string)",
-  "function deactivateNamedAccount(string fullName)",
-  "function calculateNameFee(string _name, string _domain) view returns (uint256)",
+  "function getOwnerHashdTags(address owner) view returns (string[])",
+  "function getPrimaryHashdTag(address owner) view returns (string)",
+  "function calculateNameFee(string name, string domain) view returns (uint256)",
+  "function isHashdTagAttached(string fullName) view returns (bool)",
+  
+  // Attachment functions
+  "function attachHashdTag(string fullName, bytes accountPublicKey)",
+  "function detachHashdTag(string fullName)",
   
   // Domain management
   "function getAvailableDomains() view returns (string[])",
-  "function domainFees(string domain) view returns (uint256)",
-  "function availableDomains(string domain) view returns (bool)",
-  
-  // HashdTag attachment functions
-  "function attachHashdTag(string fullName, bytes bareAccountPublicKey)",
-  "function detachHashdTag(string fullName)",
-  "function isHashdTagAttached(string fullName) view returns (bool)",
+  "function getDomainTierPrices(string domain) view returns (uint256[5])",
+  "function isDomainActive(string domain) view returns (bool)",
   
   // Owner functions
   "function addDomain(string domain, uint256 fee)",
@@ -1098,17 +1094,18 @@ export class ContractService {
 
 
   // AccountRegistry methods - Bare Accounts (FREE)
-  async registerBareAccount(publicKey: string): Promise<ethers.ContractTransactionResponse> {
+  async registerAccount(publicKey: string): Promise<ethers.ContractTransactionResponse> {
     if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
     
     // Estimate gas and add 20% buffer
-    const estimatedGas = await this.contracts.accountRegistry.registerBareAccount.estimateGas(publicKey);
+    const estimatedGas = await this.contracts.accountRegistry.registerAccount.estimateGas(publicKey);
     const gasLimit = (estimatedGas * BigInt(120)) / BigInt(100);
     
-    return await this.contracts.accountRegistry.registerBareAccount(publicKey, { gasLimit });
+    return await this.contracts.accountRegistry.registerAccount(publicKey, { gasLimit });
   }
 
-  async hasBareAccount(address: string): Promise<boolean> {
+
+  async hasAccount(address: string): Promise<boolean> {
     // Use fast read provider for this read-only operation
     const provider = this.getReadProvider();
     const accountRegistry = new ethers.Contract(
@@ -1116,60 +1113,62 @@ export class ContractService {
       ACCOUNT_REGISTRY_ABI,
       provider
     );
-    return await accountRegistry.hasBareAccount(address);
+    return await accountRegistry.hasAccount(address);
   }
 
-  async getBareAccount(address: string): Promise<{
+
+  async getAccount(address: string, index: number = 0): Promise<{
     publicKey: string;
-    timestamp: bigint;
+    createdAt: bigint;
     isActive: boolean;
+    hasHashdTagAttached: boolean;
+    hashdTagName: string;
+    hashdTagTokenId: bigint;
   }> {
     if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
-    const result = await this.contracts.accountRegistry.getBareAccount(address);
+    const result = await this.contracts.accountRegistry.getAccount(address, index);
     return {
       publicKey: result[0],
-      timestamp: result[1],
-      isActive: result[2]
+      createdAt: result[1],
+      isActive: result[2],
+      hasHashdTagAttached: result[3],
+      hashdTagName: result[4],
+      hashdTagTokenId: result[5]
     };
   }
 
-  async getBareAccounts(address: string): Promise<{
-    publicKeys: string[];
-    timestamps: bigint[];
-    isActives: boolean[];
-  }> {
+
+  async getAccounts(address: string): Promise<Array<{
+    publicKey: string;
+    createdAt: bigint;
+    isActive: boolean;
+    hasHashdTagAttached: boolean;
+    hashdTagName: string;
+    hashdTagTokenId: bigint;
+  }>> {
     if (!this.contracts.accountRegistry) {
       throw new Error('AccountRegistry not initialized - call initializeReadOnlyContracts() first');
     }
-    const result = await this.contracts.accountRegistry.getBareAccounts(address);
-    return {
-      publicKeys: result[0],
-      timestamps: result[1],
-      isActives: result[2]
-    };
+    const result = await this.contracts.accountRegistry.getAccounts(address);
+    return result.map((account: any) => ({
+      publicKey: account[0],
+      createdAt: account[1],
+      isActive: account[2],
+      hasHashdTagAttached: account[3],
+      hashdTagName: account[4],
+      hashdTagTokenId: account[5]
+    }));
   }
 
-  async getBareAccountCount(address: string): Promise<number> {
+
+  async getAccountCount(address: string): Promise<number> {
     if (!this.contracts.accountRegistry) {
       throw new Error('AccountRegistry not initialized - call initializeReadOnlyContracts() first');
     }
-    const count = await this.contracts.accountRegistry.getBareAccountCount(address);
+    const count = await this.contracts.accountRegistry.getAccountCount(address);
     return Number(count);
   }
 
-  async getBareAccountAtIndex(address: string, index: number): Promise<{
-    publicKey: string;
-    timestamp: bigint;
-    isActive: boolean;
-  }> {
-    if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
-    const result = await this.contracts.accountRegistry.getBareAccountAtIndex(address, index);
-    return {
-      publicKey: result[0],
-      timestamp: result[1],
-      isActive: result[2]
-    };
-  }
 
   async getPublicKeyByAddress(address: string): Promise<string> {
     if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
@@ -1181,8 +1180,8 @@ export class ContractService {
     return await this.contracts.accountRegistry.updateBareAccountKey(index, publicKey);
   }
 
-  // AccountRegistry methods - Named Accounts (PAID)
-  async registerNamedAccount(name: string, domain: string, publicKey: string, feeInWei: bigint): Promise<ethers.ContractTransactionResponse> {
+  // AccountRegistry methods - Named Accounts with HashdTag (PAID)
+  async registerAccountWithHashdTag(name: string, domain: string, publicKey: string, feeInWei: bigint): Promise<ethers.ContractTransactionResponse> {
     if (!this.contracts.accountRegistry) {
       console.error('❌ AccountRegistry not initialized!');
       console.error('Signer:', !!this.signer);
@@ -1193,11 +1192,11 @@ export class ContractService {
     
     // Estimate gas and add 20% buffer (this will also validate the transaction)
     try {
-      const estimatedGas = await this.contracts.accountRegistry.registerNamedAccount.estimateGas(name, domain, publicKey, { value: feeInWei });
+      const estimatedGas = await this.contracts.accountRegistry.registerAccountWithHashdTag.estimateGas(name, domain, publicKey, { value: feeInWei });
       const gasLimit = (estimatedGas * BigInt(120)) / BigInt(100); // 20% buffer
       console.log(`⛽ Gas estimate: ${estimatedGas.toString()}, using limit: ${gasLimit.toString()}`);
       
-      return await this.contracts.accountRegistry.registerNamedAccount(name, domain, publicKey, { 
+      return await this.contracts.accountRegistry.registerAccountWithHashdTag(name, domain, publicKey, { 
         value: feeInWei,
         gasLimit 
       });
@@ -1238,7 +1237,7 @@ export class ContractService {
     }
   }
 
-  async getNamedAccount(fullName: string): Promise<{
+  async getHashdTagAccount(fullName: string): Promise<{
     publicKey: string;
     owner: string;
     timestamp: bigint;
@@ -1251,7 +1250,7 @@ export class ContractService {
       ACCOUNT_REGISTRY_ABI,
       provider
     );
-    const result = await accountRegistry.getNamedAccount(fullName);
+    const result = await accountRegistry.getHashdTagAccount(fullName);
     return {
       publicKey: result[0],
       owner: result[1],
@@ -1304,7 +1303,7 @@ export class ContractService {
     return await accountRegistry.isNameAvailable(name, domain);
   }
 
-  async getOwnerNamedAccounts(address: string): Promise<string[]> {
+  async getOwnerHashdTags(address: string): Promise<string[]> {
     // Use fast read provider for this read-only operation
     const provider = this.getReadProvider();
     const accountRegistry = new ethers.Contract(
@@ -1312,8 +1311,9 @@ export class ContractService {
       ACCOUNT_REGISTRY_ABI,
       provider
     );
-    return await accountRegistry.getOwnerNamedAccounts(address);
+    return await accountRegistry.getOwnerHashdTags(address);
   }
+
 
   async getNameByPublicKey(publicKey: string): Promise<string | null> {
     // Use fast reverse mapping from contract
@@ -1907,12 +1907,12 @@ export class ContractService {
         provider
       );
 
-      // Get all named accounts for this address
-      const namedAccounts = await this.getOwnerNamedAccounts(ownerAddress);
+      // Get all HashdTags for this address
+      const hashdTags = await this.getOwnerHashdTags(ownerAddress);
       
       const nfts = [];
       
-      for (const fullName of namedAccounts) {
+      for (const fullName of hashdTags) {
         try {
           // Generate token ID from full name (same as contract does)
           const tokenId = ethers.keccak256(ethers.toUtf8Bytes(fullName));

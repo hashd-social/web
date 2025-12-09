@@ -107,19 +107,25 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
       setProcessing(true);
       setError(null);
       
-      // Get bare account public key
-      const bareAccounts = await contractService.getBareAccounts(userAddress);
-      if (!bareAccounts.publicKeys || bareAccounts.publicKeys.length === 0) {
-        throw new Error('No bare account found. Please create a bare account first.');
+      // Get accounts and find one without a HashdTag attached
+      const accountCount = await contractService.getAccountCount(userAddress);
+      if (accountCount === 0) {
+        throw new Error('No account found. Please create an account first.');
       }
       
-      // Use the first active bare account
-      const activeIndex = bareAccounts.isActives.findIndex((active: boolean) => active);
-      if (activeIndex === -1) {
-        throw new Error('No active bare account found.');
+      // Find an active account without a HashdTag attached
+      let publicKey = '';
+      for (let i = 0; i < accountCount; i++) {
+        const account = await contractService.getAccount(userAddress, i);
+        if (account.isActive && !account.hasHashdTagAttached) {
+          publicKey = account.publicKey;
+          break;
+        }
       }
       
-      const publicKey = bareAccounts.publicKeys[activeIndex];
+      if (!publicKey) {
+        throw new Error('No available account found to attach HashdTag. All accounts already have HashdTags attached.');
+      }
       
       const tx = await contractService.attachHashdTag(fullName, publicKey);
       await tx.wait();

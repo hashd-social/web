@@ -65,7 +65,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
           hasOnChainNamedAccounts = false;
         } else {
           console.log(`🔍 Checking blockchain for named accounts for address: ${userAddress}`);
-          const namedAccounts = await contractService.getOwnerNamedAccounts(userAddress);
+          const namedAccounts = await contractService.getOwnerHashdTags(userAddress);
           hasOnChainNamedAccounts = namedAccounts.length > 0;
           console.log(`🔗 Blockchain check - Named accounts: ${namedAccounts.length}`, namedAccounts);
         }
@@ -244,7 +244,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
           } else {
             console.log(`🔍 Checking blockchain for named accounts for address: ${userAddress}`);
             // Get all named accounts for this wallet address from blockchain
-            const namedAccounts = await contractService.getOwnerNamedAccounts(userAddress);
+            const namedAccounts = await contractService.getOwnerHashdTags(userAddress);
             hasOnChainNamedAccounts = namedAccounts.length > 0;
             console.log(`🔗 Blockchain check - Named accounts: ${namedAccounts.length}`, namedAccounts);
           }
@@ -302,7 +302,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
         let hasOnChainNamedAccounts = false;
         if (userAddress) {
           try {
-            const namedAccounts = await contractService.getOwnerNamedAccounts(userAddress);
+            const namedAccounts = await contractService.getOwnerHashdTags(userAddress);
             hasOnChainNamedAccounts = namedAccounts.length > 0;
           } catch (error) {
             console.log('Could not check blockchain named accounts:', error);

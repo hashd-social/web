@@ -38,16 +38,16 @@ export const useMailbox = (userAddress: string | null) => {
     if (!userAddress) return;
 
     try {
-      const namedAccounts = await contractService.getOwnerNamedAccounts(userAddress);
-      console.log('📋 Named accounts for wallet:', namedAccounts);
+      const hashdTags = await contractService.getOwnerHashdTags(userAddress);
+      console.log('📋 HashdTags for wallet:', hashdTags);
 
       const updatedMailboxes = await Promise.all(
         mailboxes.map(async (mailbox) => {
           try {
-            for (const namedAccount of namedAccounts) {
-              const accountPubKey = await contractService.getPublicKeyByName(namedAccount);
+            for (const hashdTag of hashdTags) {
+              const accountPubKey = await contractService.getPublicKeyByName(hashdTag);
               if (accountPubKey.toLowerCase() === mailbox.publicKeyHash.toLowerCase()) {
-                return { ...mailbox, name: namedAccount };
+                return { ...mailbox, name: hashdTag };
               }
             }
           } catch (error) {
