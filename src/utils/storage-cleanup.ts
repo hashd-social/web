@@ -179,9 +179,8 @@ export class StorageCleanup {
         mailboxes.forEach((mailbox: any) => {
           const hash = mailbox.publicKeyHash;
           if (!seen.has(hash)) {
-            // Keep the first occurrence, but remove PIN field if it exists
-            const cleaned = { ...mailbox };
-            delete cleaned.pin;
+            // Keep the first occurrence, but clear PIN field (set to empty, don't delete)
+            const cleaned = { ...mailbox, pin: '' };
             seen.set(hash, cleaned);
             unique.push(cleaned);
           } else {

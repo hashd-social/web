@@ -414,7 +414,7 @@ export interface MailboxInfo {
 export class SimpleKeyManager {
   private static readonly MAILBOXES_KEY = 'hashd_mailboxes';
   private static readonly VERSION_KEY = 'hashd_key_version';
-  private static readonly CURRENT_VERSION = 'v5-deterministic';
+  private static readonly CURRENT_VERSION = 'v1-deterministic';
   
   // Legacy constants (only used for cleanup of old insecure storage)
   private static readonly KEYS_PREFIX = 'hashd_keys_';
@@ -424,16 +424,17 @@ export class SimpleKeyManager {
   static checkVersion(): void {
     const storedVersion = localStorage.getItem(this.VERSION_KEY);
     if (storedVersion !== this.CURRENT_VERSION) {
-      console.warn(' Key generation version changed - clearing old mailboxes');
+      console.warn('⚠️ Key generation version changed');
       console.warn(`  Old version: ${storedVersion || 'none'}`);
       console.warn(`  New version: ${this.CURRENT_VERSION}`);
       console.warn('  Please recreate your mailboxes with the same PINs');
       
-      // Clear all old data
+      // Clear old KEY data only (not mailbox metadata)
+      // Mailbox metadata (names, hashes) should persist so users can restore
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (key.includes('hashd_') || key.includes('hashd_'))) {
+        if (key && key.startsWith('hashd_keys_')) {
           keysToRemove.push(key);
         }
       }
@@ -442,7 +443,7 @@ export class SimpleKeyManager {
       // Set new version
       localStorage.setItem(this.VERSION_KEY, this.CURRENT_VERSION);
       
-      console.log(' Old mailboxes cleared - ready for fresh start');
+      console.log('✅ Version updated - mailbox metadata preserved');
     }
   }
   
@@ -691,37 +692,34 @@ export class SimpleKeyManager {
     console.log('✅ Mailbox deleted (metadata removed)');
   }
   
-  // Clear all keys (disconnect)
+  /**
+   * Clear session keys (memory only)
+   * Does NOT clear mailbox metadata - that should persist for restoration
+   */
   static clearKeys(walletAddress?: string): void {
-    // Clear session memory
+    // Clear session memory (RAM)
     this.sessionKeys.clear();
     console.log('🗑️ Cleared session memory');
     
-    // Clear sessionStorage
+    // Clear legacy key storage from localStorage (hashd_keys_*)
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(this.KEYS_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Clear current mailbox pointer (but NOT mailbox list)
     if (walletAddress) {
-      const mailboxes = this.getMailboxList(walletAddress);
-      mailboxes.forEach(m => {
-        const pinHash = this.getPinHash(m.pin, walletAddress);
-        const sessionKey = `${walletAddress}_${pinHash}`;
-        sessionStorage.removeItem(sessionKey);
-      });
-      console.log('🗑️ Cleared sessionStorage');
-    } else {
-      // Clear all sessionStorage if no specific wallet
-      sessionStorage.clear();
+      const currentKey = this.getWalletKey(this.CURRENT_MAILBOX_KEY, walletAddress);
+      localStorage.removeItem(currentKey);
     }
     
-    // Clear localStorage (old keys if any exist)
-    const mailboxes = this.getMailboxList(walletAddress);
-    mailboxes.forEach(m => {
-      const keysKey = this.getWalletKey(this.KEYS_PREFIX + m.pin, walletAddress);
-      localStorage.removeItem(keysKey);
-    });
-    const mailboxesKey = this.getWalletKey(this.MAILBOXES_KEY, walletAddress);
-    const currentKey = this.getWalletKey(this.CURRENT_MAILBOX_KEY, walletAddress);
-    localStorage.removeItem(mailboxesKey);
-    localStorage.removeItem(currentKey);
-    console.log('🗑️ Cleared localStorage');
+    // NOTE: Mailbox metadata (hashd_mailboxes_*) is NOT cleared
+    // This allows users to restore their mailboxes by entering their PIN
+    console.log('🗑️ Cleared keys (mailbox metadata preserved)');
   }
   
   /**

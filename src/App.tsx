@@ -182,22 +182,9 @@ function App() {
   const accountAbstraction = useAccountAbstraction(state.userAddress, signer);
 
   // Listen for wallet and network changes
+  // Chain change listener (separate from account change to avoid duplicate listeners)
   useEffect(() => {
     if (typeof window.ethereum === 'undefined') return;
-
-    const handleAccountsChanged = (accounts: string[]) => {
-      console.log('🔄 [Wallet] Account changed:', accounts);
-      if (accounts.length === 0) {
-        // User disconnected wallet
-        console.log('👋 [Wallet] User disconnected wallet');
-        disconnectWallet(true); // Clear session data
-      } else if (state.isConnected && accounts[0].toLowerCase() !== state.userAddress.toLowerCase()) {
-        // User switched to a different account
-        console.log('🔄 [Wallet] User switched account, disconnecting...');
-        toast.warning('Wallet account changed. Please reconnect.');
-        disconnectWallet(true); // Clear session data
-      }
-    };
 
     const handleChainChanged = (chainId: string) => {
       console.log('🔄 [Network] Chain changed:', chainId);
@@ -209,18 +196,14 @@ function App() {
       }
     };
 
-    // Add listeners
-    window.ethereum.on('accountsChanged', handleAccountsChanged);
     window.ethereum.on('chainChanged', handleChainChanged);
 
-    // Cleanup
     return () => {
       if (window.ethereum?.removeListener) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
         window.ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
-  }, [state.isConnected, state.userAddress]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -352,21 +335,29 @@ function App() {
     // Listen for account changes in MetaMask
     const handleAccountsChanged = (accounts: string[]) => {
       console.log('🔄 [AccountChange] MetaMask accounts changed:', accounts);
+      console.log('   zustandWallet:', zustandWallet);
+      console.log('   state.userAddress:', state.userAddress);
+      console.log('   state.isConnected:', state.isConnected);
       
       if (accounts.length === 0) {
-        // User disconnected from MetaMask
+        // User disconnected from MetaMask - just disconnect, don't clear data
         console.log('⚠️ [AccountChange] User disconnected from MetaMask');
-        disconnectWallet(true); // Clear session data
+        disconnectWallet(false);
       } else {
         const newAccount = accounts[0].toLowerCase();
+        const currentWallet = (zustandWallet || state.userAddress || '').toLowerCase();
         
-        if (zustandWallet && newAccount !== zustandWallet.toLowerCase()) {
-          // Wallet changed - disconnect and show connect screen
+        // Only trigger disconnect if we have a current wallet AND it's different
+        if (currentWallet && newAccount !== currentWallet) {
           console.log('⚠️ [AccountChange] Wallet changed - disconnecting');
-          console.log('   Old:', zustandWallet);
+          console.log('   Old:', currentWallet);
           console.log('   New:', newAccount);
-          toast.warning('Wallet account changed. Logging out and clearing session data.');
-          disconnectWallet(true); // Clear session data
+          toast.info('Wallet account changed. Please reconnect.');
+          disconnectWallet(false); // Don't clear data - it's wallet-namespaced
+        } else if (!currentWallet) {
+          console.log('ℹ️ [AccountChange] No current wallet stored, ignoring change');
+        } else {
+          console.log('ℹ️ [AccountChange] Same wallet, no action needed');
         }
       }
     };
@@ -391,12 +382,6 @@ function App() {
     const checkIncompleteRegistrations = async () => {
       if (!state.isConnected || !state.userAddress) return;
       
-      // Wait until mailboxes have been loaded before checking
-      if (!mailboxesLoaded) {
-        console.log('⏳ Waiting for mailboxes to load before checking incomplete registrations...');
-        return;
-      }
-      
       // If user already has a keyPair loaded, they've successfully accessed their mailbox
       if (state.keyPair) {
         console.log('✅ KeyPair loaded - user has access to mailbox, clearing warnings');
@@ -404,9 +389,13 @@ function App() {
         return;
       }
       
+      // Check localStorage DIRECTLY to avoid race conditions with React state
+      // This is the source of truth for whether mailboxes exist
+      const localMailboxes = SimpleKeyManager.getMailboxList(state.userAddress);
+      
       // If user has local mailboxes, they just need to enter their PIN - not incomplete
-      if (mailboxes.length > 0) {
-        console.log('✅ Local mailboxes exist - user just needs to enter PIN');
+      if (localMailboxes.length > 0) {
+        console.log('✅ Local mailboxes exist in localStorage - user just needs to enter PIN');
         setState(prev => prev.warning ? { ...prev, warning: '' } : prev);
         return;
       }
@@ -437,7 +426,7 @@ function App() {
     };
     
     checkIncompleteRegistrations();
-  }, [state.isConnected, state.userAddress, state.keyPair, mailboxes, mailboxesLoaded]);
+  }, [state.isConnected, state.userAddress, state.keyPair]);
   
   
   // Resolve actual account names from public keys
