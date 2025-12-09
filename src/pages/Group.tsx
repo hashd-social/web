@@ -9,6 +9,8 @@ import { TabBar, Tab } from '../components/TabBar';
 import { DistributeTokenModal } from '../components/modals/DistributeTokenModal';
 import { ClaimAirdropModal } from '../components/modals/ClaimAirdropModal';
 import { CreatePostModal } from '../components/modals/CreatePostModal';
+import { BuyNFTModal } from '../components/modals/BuyNFTModal';
+import { GiftNFTModal } from '../components/modals/GiftNFTModal';
 import { AirdropRecipient } from '../utils/merkleTree';
 import { deriveGroupKey } from '../services/ipfs/groupPosts';
 import { contractService, NETWORK_CONFIG, GROUP_FACTORY_ABI, ERC20_ABI, ERC721_ABI, USER_PROFILE_ABI, GROUP_POSTS_ABI } from '../utils/contracts';
@@ -909,21 +911,19 @@ export const Group: React.FC = () => {
       </div>
 
       {/* Buy NFT Modal */}
-      {showBuyModal && (
-        <BuyNFTModal
-          nftPrice={group.nftPrice || '0'}
-          onClose={() => setShowBuyModal(false)}
-          onBuy={handleBuyNFT}
-        />
-      )}
+      <BuyNFTModal
+        isOpen={showBuyModal}
+        nftPrice={group.nftPrice || '0'}
+        onClose={() => setShowBuyModal(false)}
+        onBuy={handleBuyNFT}
+      />
 
       {/* Gift NFT Modal */}
-      {showGiftModal && (
-        <GiftNFTModal
-          onClose={() => setShowGiftModal(false)}
-          onGift={handleGiftNFT}
-        />
-      )}
+      <GiftNFTModal
+        isOpen={showGiftModal}
+        onClose={() => setShowGiftModal(false)}
+        onGift={handleGiftNFT}
+      />
 
       {/* Distribute Token Modal */}
       {showDistributeModal && group && (
@@ -985,130 +985,6 @@ export const Group: React.FC = () => {
           onClaim={handleClaimAirdrop}
         />
       )}
-    </div>
-  );
-};
-
-// Buy NFT Modal Component
-interface BuyNFTModalProps {
-  nftPrice: string;
-  onClose: () => void;
-  onBuy: () => void;
-}
-
-const BuyNFTModal: React.FC<BuyNFTModalProps> = ({ nftPrice, onClose, onBuy }) => {
-  const [isPurchasing, setIsPurchasing] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsPurchasing(true);
-    await onBuy();
-    setIsPurchasing(false);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900/95 rounded-lg shadow-xl max-w-md w-full">
-        <div className="border-b border-cyan-500/20 px-6 py-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold neon-text-cyan uppercase tracking-wider font-mono">Mint a HASHD Prime key</h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-            disabled={isPurchasing}
-          >
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="bg-cyan-900/20 rounded-lg p-4">
-            <p className="text-sm font-bold text-cyan-400 mb-2 uppercase tracking-wider font-mono">Benefits:</p>
-            <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside font-mono">
-              <li>View premium posts for FREE</li>
-              <li>Create group governance proposals</li>
-              <li>Exclusive supporter badge</li>
-              <li>Limited collectible (unique numbered NFT)</li>
-            </ul>
-          </div>
-
-          <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
-            <div className="text-sm text-purple-400 mb-1 font-bold uppercase tracking-wider font-mono">Price</div>
-            <div className="text-2xl font-bold text-purple-400 font-mono">{nftPrice} ETH</div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isPurchasing}
-            className="w-full bg-cyan-500/10 hover:border-cyan-500/50 neon-text-cyan py-3 px-4 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-wider"
-          >
-            {isPurchasing ? 'Purchasing...' : `Purchase for ${nftPrice} ETH`}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// Gift NFT Modal Component
-interface GiftNFTModalProps {
-  onClose: () => void;
-  onGift: (recipientAddress: string) => void;
-}
-
-const GiftNFTModal: React.FC<GiftNFTModalProps> = ({ onClose, onGift }) => {
-  const [recipientAddress, setRecipientAddress] = useState('');
-  const [isGifting, setIsGifting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsGifting(true);
-    await onGift(recipientAddress);
-    setIsGifting(false);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900/95 rounded-lg shadow-xl max-w-md w-full">
-        <div className="border-b border-cyan-500/20 px-6 py-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold neon-text-cyan uppercase tracking-wider font-mono">Gift NFT</h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-            disabled={isGifting}
-          >
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-              Recipient Address *
-            </label>
-            <input
-              type="text"
-              value={recipientAddress}
-              onChange={(e) => setRecipientAddress(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-900/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 hover:border-cyan-500/50 font-mono text-sm transition-colors"
-              placeholder="0x..."
-              required
-              disabled={isGifting}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isGifting}
-            className="w-full bg-purple-500/10 border border-purple-500/30 hover:border-purple-500/50 text-purple-400 py-3 px-4 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed font-mono uppercase tracking-wider"
-          >
-            {isGifting ? 'Gifting...' : 'Gift NFT'}
-          </button>
-        </form>
-      </div>
     </div>
   );
 };
