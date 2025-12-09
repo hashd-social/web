@@ -77,14 +77,7 @@ export const Account: React.FC<AccountProps> = ({
                 console.log(`🔄 Clearing stale HashdTag name "${localMailbox.name}" from localStorage`);
                 displayName = 'Bare Account';
                 // Update localStorage to clear the stale name
-                const allMailboxes = SimpleKeyManager.getMailboxList(userAddress);
-                const updated = allMailboxes.map(m => 
-                  m.publicKeyHash === publicKeyHash 
-                    ? { ...m, name: 'Bare Account' }
-                    : m
-                );
-                const mailboxesKey = `hashd_mailboxes_${userAddress.toLowerCase()}`;
-                localStorage.setItem(mailboxesKey, JSON.stringify(updated));
+                SimpleKeyManager.renameMailbox(userAddress, publicKeyHash, 'Bare Account');
               }
               
               accounts.push({ 
@@ -184,8 +177,7 @@ export const Account: React.FC<AccountProps> = ({
     
     if (syncedMailboxes.length !== localMailboxes.length) {
       console.log(`🧹 Removing ${localMailboxes.length - syncedMailboxes.length} orphaned mailboxes from localStorage`);
-      const mailboxesKey = `hashd_mailboxes_${userAddress.toLowerCase()}`;
-      localStorage.setItem(mailboxesKey, JSON.stringify(syncedMailboxes));
+      SimpleKeyManager.saveMailboxList(syncedMailboxes, userAddress, true);
       onRefreshMailboxes();
     } else {
       console.log('✅ All local mailboxes are synced with blockchain');
@@ -230,17 +222,10 @@ export const Account: React.FC<AccountProps> = ({
     console.log('🏷️ Renaming mailbox with hash:', publicKeyHash, 'to:', newName.trim());
     
     // Update mailbox name in localStorage
-    const allMailboxes = SimpleKeyManager.getMailboxList(userAddress);
-    const updated = allMailboxes.map(m => 
-      m.publicKeyHash === publicKeyHash 
-        ? { ...m, name: newName.trim() }
-        : m
-    );
+    if (!userAddress) return;
     
-    const mailboxesKey = userAddress ? `hashd_mailboxes_${userAddress.toLowerCase()}` : 'hashd_mailboxes';
-    localStorage.setItem(mailboxesKey, JSON.stringify(updated));
-    
-    console.log('✅ Mailbox renamed in localStorage');
+    SimpleKeyManager.renameMailbox(userAddress, publicKeyHash, newName.trim());
+    console.log('✅ Mailbox renamed');
     
     onRefreshMailboxes();
     

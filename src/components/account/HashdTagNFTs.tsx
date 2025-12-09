@@ -46,7 +46,6 @@ export const HashdTagNFTs: React.FC<HashdTagNFTsProps> = ({ userAddress, onAccou
   return (
     <div className="bg-gray-800/50 rounded-lg p-6">
       <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono flex items-center gap-2">
-        <ImageIcon className="w-5 h-5" />
         Your HashdTag NFTs ({hashdTagNFTs.length})
       </h3>
       <p className="text-sm text-gray-400 mb-4">

@@ -91,9 +91,7 @@ export const CurrentMailbox: React.FC<CurrentMailboxProps> = ({
   return (
     <div className="bg-gray-800/50 rounded-lg p-6">
       <div className="flex items-center gap-3 mb-4">
-        <div className="p-3 bg-cyan-500/10 rounded-lg">
-          <User className="w-6 h-6 neon-text-cyan" />
-        </div>
+ 
         <div>
           <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider font-mono">
             Current Mailbox

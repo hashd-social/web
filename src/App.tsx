@@ -469,7 +469,7 @@ function App() {
     // Get all named accounts for this wallet once
     let hashdTagAccounts: string[] = [];
     try {
-      hashdTagAccounts = await contractService.getOwnerHashdTags(state.userAddress);
+      hashdTagAccounts = await contractService.getOwnerHashdTags(walletAddr);
       console.log(`📋 Found ${hashdTagAccounts.length} named accounts for wallet:`, hashdTagAccounts);
     } catch (error) {
       console.warn('Could not fetch named accounts for wallet:', error);
@@ -523,14 +523,10 @@ function App() {
       return { ...mailbox, name: preservedName };
     });
     
-    // Update localStorage with resolved names (use namespaced key)
-    // Safety: Only write if we have mailboxes to write (never overwrite with empty array)
+    // Update localStorage with resolved names using centralized method
     if (walletAddr && resolvedMailboxes.length > 0) {
-      const mailboxesKey = `hashd_mailboxes_${walletAddr.toLowerCase()}`;
-      localStorage.setItem(mailboxesKey, JSON.stringify(resolvedMailboxes));
-      console.log('✅ Updated mailbox names with resolved account names in:', mailboxesKey);
-    } else if (resolvedMailboxes.length === 0) {
-      console.log('⏭️ Not writing empty mailboxes array to localStorage');
+      SimpleKeyManager.saveMailboxList(resolvedMailboxes, walletAddr);
+      console.log('✅ Updated mailbox names with resolved account names');
     }
     
     return resolvedMailboxes;
@@ -570,11 +566,6 @@ function App() {
     } else if (walletAddr) {
       // If not connected but have wallet, just load from storage
       mailboxes = SimpleKeyManager.getMailboxList(walletAddr);
-      console.log(`📬 Loaded ${mailboxes.length} mailboxes from storage for ${walletAddr}`);
-      // Debug: check localStorage directly
-      const key = `hashd_mailboxes_${walletAddr.toLowerCase()}`;
-      const raw = localStorage.getItem(key);
-      console.log(`📬 Raw localStorage[${key}]:`, raw ? `${JSON.parse(raw).length} items` : 'null');
     } else {
       // No wallet address available
       console.log('⏭️ No wallet address available, returning empty mailboxes');

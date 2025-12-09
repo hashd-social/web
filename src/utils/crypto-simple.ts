@@ -551,6 +551,86 @@ export class SimpleKeyManager {
     }
   }
   
+  /**
+   * Save mailboxes to localStorage (replaces entire list)
+   * Safety: Will not save empty array if mailboxes already exist (prevents accidental wipe)
+   */
+  static saveMailboxList(mailboxes: MailboxInfo[], walletAddress: string, force = false): boolean {
+    if (!walletAddress) {
+      console.warn('⚠️ Cannot save mailboxes without wallet address');
+      return false;
+    }
+    
+    const mailboxesKey = this.getWalletKey(this.MAILBOXES_KEY, walletAddress);
+    
+    // Safety: Don't overwrite existing mailboxes with empty array unless forced
+    if (mailboxes.length === 0 && !force) {
+      const existing = localStorage.getItem(mailboxesKey);
+      if (existing) {
+        console.warn('⚠️ Refusing to overwrite existing mailboxes with empty array');
+        return false;
+      }
+    }
+    
+    localStorage.setItem(mailboxesKey, JSON.stringify(mailboxes));
+    return true;
+  }
+  
+  /**
+   * Update a specific mailbox by publicKeyHash
+   */
+  static updateMailbox(
+    walletAddress: string, 
+    publicKeyHash: string, 
+    updates: Partial<Omit<MailboxInfo, 'publicKeyHash'>>
+  ): boolean {
+    if (!walletAddress) return false;
+    
+    const mailboxes = this.getMailboxList(walletAddress);
+    const index = mailboxes.findIndex(m => m.publicKeyHash === publicKeyHash);
+    
+    if (index === -1) {
+      console.warn(`⚠️ Mailbox not found: ${publicKeyHash}`);
+      return false;
+    }
+    
+    mailboxes[index] = { ...mailboxes[index], ...updates };
+    return this.saveMailboxList(mailboxes, walletAddress, true);
+  }
+  
+  /**
+   * Rename a mailbox
+   */
+  static renameMailbox(walletAddress: string, publicKeyHash: string, newName: string): boolean {
+    return this.updateMailbox(walletAddress, publicKeyHash, { name: newName });
+  }
+  
+  /**
+   * Delete a specific mailbox by publicKeyHash
+   */
+  static deleteMailboxByHash(publicKeyHash: string, walletAddress: string): boolean {
+    if (!walletAddress) return false;
+    
+    const mailboxes = this.getMailboxList(walletAddress);
+    const filtered = mailboxes.filter(m => m.publicKeyHash !== publicKeyHash);
+    
+    if (filtered.length === mailboxes.length) {
+      console.warn(`⚠️ Mailbox not found: ${publicKeyHash}`);
+      return false;
+    }
+    
+    return this.saveMailboxList(filtered, walletAddress, true);
+  }
+  
+  /**
+   * Clear all mailboxes for a wallet (use with caution)
+   */
+  static clearMailboxes(walletAddress: string): void {
+    if (!walletAddress) return;
+    const mailboxesKey = this.getWalletKey(this.MAILBOXES_KEY, walletAddress);
+    localStorage.removeItem(mailboxesKey);
+  }
+  
   // Get current mailbox PIN
   // SECURITY: PINs are NEVER stored. This always returns null.
   static getCurrentMailboxPin(walletAddress?: string): string | null {
