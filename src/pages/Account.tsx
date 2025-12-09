@@ -109,6 +109,7 @@ export const Account: React.FC<AccountProps> = ({
 
   // Sync mailbox metadata (names, timestamps) with blockchain accounts
   // Note: This is UI metadata only, NOT encryption keys. Keys follow the persistence model.
+  // IMPORTANT: This function only REMOVES orphaned mailboxes, never deletes all of them
   const syncMailboxes = async () => {
     if (!userAddress) return;
     
@@ -116,9 +117,23 @@ export const Account: React.FC<AccountProps> = ({
     const localMailboxes = SimpleKeyManager.getMailboxList(userAddress);
     console.log('📦 Local mailboxes:', localMailboxes.length);
     
+    // Safety check: Don't sync if no local mailboxes (nothing to sync)
+    if (localMailboxes.length === 0) {
+      console.log('⏭️ No local mailboxes to sync');
+      return;
+    }
+    
     // Get all on-chain accounts using unified model
-    const hashdTags = await contractService.getOwnerHashdTags(userAddress);
-    const accountCount = await contractService.getAccountCount(userAddress);
+    let hashdTags: string[] = [];
+    let accountCount = 0;
+    
+    try {
+      hashdTags = await contractService.getOwnerHashdTags(userAddress);
+      accountCount = await contractService.getAccountCount(userAddress);
+    } catch (error) {
+      console.warn('⚠️ Could not fetch blockchain accounts, skipping sync:', error);
+      return; // Don't sync if we can't read blockchain
+    }
     
     // Build set of valid public key hashes from blockchain
     const validHashes = new Set<string>();
@@ -151,8 +166,21 @@ export const Account: React.FC<AccountProps> = ({
     
     console.log('✅ Valid hashes from blockchain:', validHashes.size);
     
+    // Safety check: Don't delete mailboxes if blockchain returned no accounts
+    // This prevents accidental deletion due to RPC issues or timing problems
+    if (validHashes.size === 0) {
+      console.warn('⚠️ Blockchain returned 0 valid accounts - skipping sync to prevent data loss');
+      return;
+    }
+    
     // Filter local mailboxes to only keep those that exist on-chain
     const syncedMailboxes = localMailboxes.filter(m => validHashes.has(m.publicKeyHash));
+    
+    // Safety check: Never delete ALL mailboxes - something is wrong if that happens
+    if (syncedMailboxes.length === 0 && localMailboxes.length > 0) {
+      console.warn('⚠️ Sync would delete all mailboxes - aborting to prevent data loss');
+      return;
+    }
     
     if (syncedMailboxes.length !== localMailboxes.length) {
       console.log(`🧹 Removing ${localMailboxes.length - syncedMailboxes.length} orphaned mailboxes from localStorage`);

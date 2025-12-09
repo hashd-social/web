@@ -178,19 +178,18 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
             </div>
           )}
           
-          {/* Attachment Status Badge */}
+          {/* Attachment Status Indicator */}
           <div className="absolute top-2 right-2">
             {checkingAttachment ? (
-              <div className="px-2 py-1 bg-gray-800/80 rounded text-xs font-mono text-gray-400">
-                ...
-              </div>
+              <div className="w-3 h-3 rounded-full bg-gray-500 animate-pulse" />
             ) : isAttached ? (
-              <div className="px-2 py-1 bg-black border border-green-500/50 rounded text-xs font-bold font-mono text-green-400">
-                ACTIVE
+              <div className="relative">
+                <div className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_2px_rgba(34,197,94,0.6)] animate-pulse" />
+                <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-400 animate-ping opacity-75" />
               </div>
             ) : (
-              <div className="px-2 py-1 bg-black border border-orange-500/50 rounded text-xs font-bold font-mono text-orange-400">
-                INACTIVE
+              <div className="relative">
+                <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_2px_rgba(239,68,68,0.6)]" />
               </div>
             )}
           </div>

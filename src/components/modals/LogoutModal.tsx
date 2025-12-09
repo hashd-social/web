@@ -8,7 +8,7 @@ interface LogoutModalProps {
 }
 
 export const LogoutModal: React.FC<LogoutModalProps> = ({ isOpen, onClose, onConfirm }) => {
-  const [clearSessionData, setClearSessionData] = useState(false);
+  const [clearSessionData, setClearSessionData] = useState(true);
 
   if (!isOpen) return null;
 

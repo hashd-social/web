@@ -551,41 +551,6 @@ export class SimpleKeyManager {
     }
   }
   
-  // Check and clear old incompatible keys (call this on app init)
-  static clearOldKeysIfNeeded(walletAddress?: string): void {
-    const mailboxesKey = this.getWalletKey(this.MAILBOXES_KEY, walletAddress);
-    const mailboxesJson = localStorage.getItem(mailboxesKey);
-    if (!mailboxesJson) return;
-    
-    try {
-      const mailboxes = JSON.parse(mailboxesJson);
-      
-      // Check if we have old 32-byte keys (pre-symmetric)
-      // New keys: both 32 bytes (symmetric)
-      // This check is just to ensure data integrity
-      for (const m of mailboxes) {
-        const keysKey = this.getWalletKey(this.KEYS_PREFIX + m.pin, walletAddress);
-        const stored = localStorage.getItem(keysKey);
-        if (stored) {
-          try {
-            const keyData = JSON.parse(stored);
-            // If keys exist and are valid, we're good
-            if (keyData.publicKey && keyData.privateKey) {
-              continue;
-            }
-          } catch (e) {
-            // Invalid key data, clear everything
-            console.warn('⚠️ Detected corrupted keys. Clearing...');
-            localStorage.removeItem(mailboxesKey);
-            return;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check old keys:', error);
-    }
-  }
-  
   // Get current mailbox PIN
   // SECURITY: PINs are NEVER stored. This always returns null.
   static getCurrentMailboxPin(walletAddress?: string): string | null {

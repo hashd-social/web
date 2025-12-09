@@ -115,8 +115,10 @@ export class StorageCleanup {
       const key = localStorage.key(i);
       if (key && key.includes('hashd_mailboxes')) {
         keys.push(key);
+        console.log(`🔍 Found mailbox key: ${key}`);
       }
     }
+    console.log(`🔍 Total mailbox keys found: ${keys.length}`);
     
     keys.forEach(key => {
       try {

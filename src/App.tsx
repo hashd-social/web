@@ -441,11 +441,20 @@ function App() {
   
   
   // Resolve actual account names from public keys
-  const resolveMailboxAccountNames = async () => {
-    const walletAddr = state.userAddress || zustandWallet;
-    const loadedMailboxes = SimpleKeyManager.getMailboxList(walletAddr);
+  const resolveMailboxAccountNames = async (explicitWalletAddr?: string) => {
+    const walletAddr = explicitWalletAddr || state.userAddress || zustandWallet;
     
-    if (loadedMailboxes.length === 0 || !state.isConnected || !state.userAddress) {
+    // Safety: Don't proceed without a valid wallet address
+    if (!walletAddr) {
+      console.log('⏭️ No wallet address, skipping account name resolution');
+      return [];
+    }
+    
+    const loadedMailboxes = SimpleKeyManager.getMailboxList(walletAddr);
+    console.log(`📬 Loaded ${loadedMailboxes.length} mailboxes for wallet ${walletAddr}`);
+    
+    // If no mailboxes, return early (don't check state.isConnected here - we have explicit wallet)
+    if (loadedMailboxes.length === 0) {
       return loadedMailboxes;
     }
     
@@ -515,11 +524,13 @@ function App() {
     });
     
     // Update localStorage with resolved names (use namespaced key)
-    // walletAddr is already defined at the top of this function
-    if (walletAddr) {
+    // Safety: Only write if we have mailboxes to write (never overwrite with empty array)
+    if (walletAddr && resolvedMailboxes.length > 0) {
       const mailboxesKey = `hashd_mailboxes_${walletAddr.toLowerCase()}`;
       localStorage.setItem(mailboxesKey, JSON.stringify(resolvedMailboxes));
       console.log('✅ Updated mailbox names with resolved account names in:', mailboxesKey);
+    } else if (resolvedMailboxes.length === 0) {
+      console.log('⏭️ Not writing empty mailboxes array to localStorage');
     }
     
     return resolvedMailboxes;
@@ -547,17 +558,27 @@ function App() {
 
   // Refresh mailboxes when needed
   const refreshMailboxes = async (explicitWalletAddr?: string, explicitKeyPair?: CryptoKeyPair) => {
-    let mailboxes;
+    let mailboxes: MailboxInfo[] = [];
     
     // Use explicit address if provided, otherwise fall back to state or zustand
     const walletAddr = explicitWalletAddr || state.userAddress || zustandWallet;
+    console.log('📬 refreshMailboxes called with walletAddr:', walletAddr, 'isConnected:', state.isConnected);
     
-    if (state.isConnected) {
-      // If connected, resolve actual account names
-      mailboxes = await resolveMailboxAccountNames();
-    } else {
-      // If not connected, just load from storage
+    if (state.isConnected && walletAddr) {
+      // If connected, resolve actual account names (pass wallet address explicitly)
+      mailboxes = await resolveMailboxAccountNames(walletAddr);
+    } else if (walletAddr) {
+      // If not connected but have wallet, just load from storage
       mailboxes = SimpleKeyManager.getMailboxList(walletAddr);
+      console.log(`📬 Loaded ${mailboxes.length} mailboxes from storage for ${walletAddr}`);
+      // Debug: check localStorage directly
+      const key = `hashd_mailboxes_${walletAddr.toLowerCase()}`;
+      const raw = localStorage.getItem(key);
+      console.log(`📬 Raw localStorage[${key}]:`, raw ? `${JSON.parse(raw).length} items` : 'null');
+    } else {
+      // No wallet address available
+      console.log('⏭️ No wallet address available, returning empty mailboxes');
+      mailboxes = [];
     }
     
     // Remove duplicates based on publicKeyHash (should not happen, but safety check)
