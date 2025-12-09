@@ -108,13 +108,7 @@ export const SessionPersistenceToggle: React.FC<SessionPersistenceToggleProps> =
           </div>
         )}
 
-        {/* Security Note */}
-        <div className="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
-          <p className="text-xs text-gray-300 font-mono leading-relaxed">
-            <strong className="text-yellow-400">🔒 Security:</strong> Your PIN is <strong>never stored</strong>. 
-            Only the derived keyPair is cached in sessionStorage when persistence is enabled.
-          </p>
-        </div>
+      
       </div>
     </div>
   );
