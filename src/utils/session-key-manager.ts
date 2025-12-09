@@ -208,11 +208,29 @@ export class SessionKeyManager {
   }
   
   /**
-   * Enable session persistence
+   * Enable session persistence and persist any existing in-memory sessions
    */
-  static enableSessionPersistence(): void {
+  static async enableSessionPersistence(): Promise<void> {
     localStorage.setItem(this.SESSION_PERSISTENCE_KEY, 'true');
     console.log('✅ [SessionKeyManager] Persistence flag set in localStorage');
+    
+    // Debug: Log current session state
+    console.log(`📊 [SessionKeyManager] Current in-memory sessions: ${this.sessionKeys.size}`);
+    
+    // Persist any existing in-memory sessions
+    const entries = Array.from(this.sessionKeys.entries());
+    if (entries.length === 0) {
+      console.log('⚠️ [SessionKeyManager] No in-memory sessions to persist');
+    }
+    
+    for (const [mailboxId, sessionData] of entries) {
+      console.log('🔐 [SessionKeyManager] Persisting existing session for:', mailboxId);
+      await this.persistEncryptedSession(mailboxId, sessionData.sessionKey);
+    }
+    
+    if (this.sessionKeys.size > 0) {
+      console.log(`✅ [SessionKeyManager] Persisted ${this.sessionKeys.size} existing session(s)`);
+    }
   }
   
   /**

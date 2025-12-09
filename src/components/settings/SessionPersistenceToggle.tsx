@@ -1,25 +1,46 @@
 /**
  * Session Persistence Toggle Component
  * 
- * Allows users to enable/disable session persistence (remember until browser close)
+ * Allows users to toggle between:
+ * - OFF: keyPair in RAM only, lost on refresh
+ * - ON: keyPair in RAM + sessionStorage, survives refresh until browser close
  */
 
-import React from 'react';
-import { useSecureMailbox } from '../../hooks/useSecureMailbox';
+import React, { useState } from 'react';
+import { SessionPersistence } from '../../utils/session-persistence';
 import { Lock, Check } from 'lucide-react';
+import { CryptoKeyPair } from '../../utils/crypto-simple';
 
-export const SessionPersistenceToggle: React.FC = () => {
-  const {
-    isSessionPersistenceEnabled,
-    enableSessionPersistence,
-    disableSessionPersistence
-  } = useSecureMailbox();
+interface SessionPersistenceToggleProps {
+  walletAddress?: string;
+  keyPair?: CryptoKeyPair | null;
+}
+
+export const SessionPersistenceToggle: React.FC<SessionPersistenceToggleProps> = ({
+  walletAddress,
+  keyPair
+}) => {
+  const [isEnabled, setIsEnabled] = useState(SessionPersistence.isEnabled());
   
   const handleToggle = () => {
-    if (isSessionPersistenceEnabled) {
-      disableSessionPersistence();
+    if (isEnabled) {
+      // Turning OFF: clear sessionStorage, keep RAM only
+      console.log('🔄 [Toggle] Disabling persistence...');
+      SessionPersistence.disable();
+      setIsEnabled(false);
     } else {
-      enableSessionPersistence();
+      // Turning ON: save current keyPair to sessionStorage
+      console.log('🔄 [Toggle] Enabling persistence...');
+      console.log('🔄 [Toggle] walletAddress:', walletAddress);
+      console.log('🔄 [Toggle] keyPair:', keyPair ? 'EXISTS' : 'NULL');
+      SessionPersistence.enable();
+      if (walletAddress && keyPair) {
+        SessionPersistence.saveSession(walletAddress, keyPair);
+        console.log('✅ [Toggle] Session saved');
+      } else {
+        console.log('⚠️ [Toggle] No walletAddress or keyPair to save!');
+      }
+      setIsEnabled(true);
     }
   };
   
@@ -43,10 +64,10 @@ export const SessionPersistenceToggle: React.FC = () => {
             <Lock className="w-5 h-5 text-cyan-400" />
             <div>
               <p className="text-sm font-bold text-white font-mono">
-                {isSessionPersistenceEnabled ? 'ENABLED' : 'DISABLED'}
+                {isEnabled ? 'ENABLED' : 'DISABLED'}
               </p>
               <p className="text-xs text-gray-400">
-                {isSessionPersistenceEnabled 
+                {isEnabled 
                   ? 'Session persists until browser close' 
                   : 'PIN required on every refresh'}
               </p>
@@ -55,12 +76,12 @@ export const SessionPersistenceToggle: React.FC = () => {
           <button
             onClick={handleToggle}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              isSessionPersistenceEnabled ? 'bg-cyan-500' : 'bg-gray-600'
+              isEnabled ? 'bg-cyan-500' : 'bg-gray-600'
             }`}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                isSessionPersistenceEnabled ? 'translate-x-6' : 'translate-x-1'
+                isEnabled ? 'translate-x-6' : 'translate-x-1'
               }`}
             />
           </button>
@@ -69,19 +90,19 @@ export const SessionPersistenceToggle: React.FC = () => {
         {/* Info */}
         <div className="p-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg">
           <p className="text-xs text-gray-400 leading-relaxed">
-            <strong className="text-cyan-400">How it works:</strong> When enabled, your session key is encrypted 
-            using a non-exportable browser key and stored in sessionStorage. You won't need to re-enter your PIN 
-            on page refresh, but the session automatically clears when you close the browser.
+            <strong className="text-cyan-400">How it works:</strong> When enabled, your keyPair is stored 
+            in sessionStorage. You won't need to re-enter your PIN on page refresh, but the session 
+            automatically clears when you close the browser.
           </p>
         </div>
 
-        {isSessionPersistenceEnabled && (
+        {isEnabled && (
           <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
             <div className="flex items-start gap-2">
               <Check className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
               <div className="text-xs text-green-300 leading-relaxed">
-                <strong>Active:</strong> Your session is encrypted and stored in sessionStorage. 
-                Your PIN and mailbox keys are still never stored—only the encrypted session key.
+                <strong>Active:</strong> Your session is stored in sessionStorage. 
+                Your PIN is never stored—only the keyPair for message encryption.
               </div>
             </div>
           </div>
@@ -90,9 +111,8 @@ export const SessionPersistenceToggle: React.FC = () => {
         {/* Security Note */}
         <div className="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
           <p className="text-xs text-gray-300 font-mono leading-relaxed">
-            <strong className="text-yellow-400">🔒 Security:</strong> Even with persistence enabled, 
-            your PIN and mailbox keys are <strong>never stored</strong>. Only the session key is encrypted 
-            and cached. The browser encryption key is non-exportable, providing strong protection even in XSS scenarios.
+            <strong className="text-yellow-400">🔒 Security:</strong> Your PIN is <strong>never stored</strong>. 
+            Only the derived keyPair is cached in sessionStorage when persistence is enabled.
           </p>
         </div>
       </div>

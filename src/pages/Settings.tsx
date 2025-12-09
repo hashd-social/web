@@ -10,6 +10,7 @@ import {
   IpfsUploadSetting,
   DataManagement
 } from '../components/settings';
+import { CryptoKeyPair } from '../utils/crypto-simple';
 
 interface SettingsProps {
   accountAbstraction: {
@@ -22,9 +23,11 @@ interface SettingsProps {
     clearSessionKey: () => void;
     clearSessionProgress: () => void;
   };
+  walletAddress?: string;
+  keyPair?: CryptoKeyPair | null;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ accountAbstraction }) => {
+export const Settings: React.FC<SettingsProps> = ({ accountAbstraction, walletAddress, keyPair }) => {
   return (
     <div className="min-h-screen hex-grid bg-gray-900">
       <PageHeader
@@ -65,7 +68,7 @@ export const Settings: React.FC<SettingsProps> = ({ accountAbstraction }) => {
 
             {/* Session Persistence */}
             <div className="lg:col-span-2">
-              <SessionPersistenceToggle />
+              <SessionPersistenceToggle walletAddress={walletAddress} keyPair={keyPair} />
             </div>
           </div>
         </div>

@@ -270,6 +270,13 @@ function App() {
         return;
       }
       
+      // IMPORTANT: Only auto-connect if session persistence is enabled
+      // If persistence is OFF, user must manually click Connect
+      if (!SessionPersistence.isEnabled()) {
+        console.log('📍 [AutoConnect] Persistence disabled - user must manually connect');
+        return;
+      }
+      
       // Try to auto-connect if MetaMask is available
       if (typeof window.ethereum !== 'undefined') {
         setState(prev => ({ ...prev, loading: true }));
@@ -373,7 +380,7 @@ function App() {
         window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
       }
     };
-  }, [hasHydrated, zustandWallet, state.isConnected]); // Re-run when Zustand finishes rehydrating, wallet changes, or connection state changes
+  }, [hasHydrated, zustandWallet, state.isConnected, state.keyPair]); // Re-run when Zustand finishes rehydrating, wallet changes, connection state changes, or keyPair changes
   
   
   // Check for incomplete registrations when wallet connects
@@ -1604,6 +1611,8 @@ function App() {
             <Route path="/settings" element={
               <Settings 
                 accountAbstraction={accountAbstraction}
+                walletAddress={state.userAddress}
+                keyPair={state.keyPair}
               />
             } />
             <Route path="/system" element={
