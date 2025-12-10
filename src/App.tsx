@@ -1627,6 +1627,12 @@ function App() {
                 onError={handleError}
               />
             } />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/documentation" element={<Documentation />} />
             <Route path="/styleguide" element={<StyleGuide />} />
           </Routes>
         </div>
