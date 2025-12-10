@@ -1,0 +1,197 @@
+/**
+ * Design System Variables
+ * 
+ * Color Hierarchy:
+ * - Primary: Cyan (#00ffff) - Main brand, CTAs, links, primary actions
+ * - Secondary: Magenta (#ff00ff) - Settings, secondary actions, accents
+ * - Tertiary: Green (#00ff41) - Success, verified, positive states
+ * - Quaternary: Orange (#f97316) - Special features, premium, highlights
+ * 
+ * Semantic Colors:
+ * - Success: Green (tertiary)
+ * - Warning: Yellow/Amber
+ * - Error/Danger: Red
+ * - Info: Cyan (primary)
+ * 
+ * Neutrals:
+ * - White: #ffffff (text on dark, highlights)
+ * - Black: #000000 (true black for contrast)
+ * - Gray scale for backgrounds and muted elements
+ */
+
+:root {
+  /* ============================================
+     BRAND COLORS (Primary to Quaternary)
+     ============================================ */
+  
+  /* Primary - Cyan (Main brand, CTAs, links) */
+  --color-primary: #00ffff;
+  --color-primary-rgb: 0, 255, 255;
+  --color-primary-50: rgba(0, 255, 255, 0.05);
+  --color-primary-100: rgba(0, 255, 255, 0.1);
+  --color-primary-200: rgba(0, 255, 255, 0.2);
+  --color-primary-300: rgba(0, 255, 255, 0.3);
+  --color-primary-400: rgba(0, 255, 255, 0.4);
+  --color-primary-500: rgba(0, 255, 255, 0.5);
+  
+  /* Secondary - Magenta (Settings, secondary actions) */
+  --color-secondary: #ff00ff;
+  --color-secondary-rgb: 255, 0, 255;
+  --color-secondary-50: rgba(255, 0, 255, 0.05);
+  --color-secondary-100: rgba(255, 0, 255, 0.1);
+  --color-secondary-200: rgba(255, 0, 255, 0.2);
+  --color-secondary-300: rgba(255, 0, 255, 0.3);
+  --color-secondary-400: rgba(255, 0, 255, 0.4);
+  --color-secondary-500: rgba(255, 0, 255, 0.5);
+  
+  /* Tertiary - Green (Success, verified, positive) */
+  --color-tertiary: #00ff41;
+  --color-tertiary-rgb: 0, 255, 65;
+  --color-tertiary-50: rgba(0, 255, 65, 0.05);
+  --color-tertiary-100: rgba(0, 255, 65, 0.1);
+  --color-tertiary-200: rgba(0, 255, 65, 0.2);
+  --color-tertiary-300: rgba(0, 255, 65, 0.3);
+  --color-tertiary-400: rgba(0, 255, 65, 0.4);
+  --color-tertiary-500: rgba(0, 255, 65, 0.5);
+  
+  /* Quaternary - Orange (Special, premium, highlights) */
+  --color-quaternary: #f97316;
+  --color-quaternary-rgb: 249, 115, 22;
+  --color-quaternary-50: rgba(249, 115, 22, 0.05);
+  --color-quaternary-100: rgba(249, 115, 22, 0.1);
+  --color-quaternary-200: rgba(249, 115, 22, 0.2);
+  --color-quaternary-300: rgba(249, 115, 22, 0.3);
+  --color-quaternary-400: rgba(249, 115, 22, 0.4);
+  --color-quaternary-500: rgba(249, 115, 22, 0.5);
+
+  /* ============================================
+     SEMANTIC COLORS
+     ============================================ */
+  
+  /* Success - Maps to Tertiary (Green) */
+  --color-success: var(--color-tertiary);
+  --color-success-rgb: var(--color-tertiary-rgb);
+  --color-success-bg: var(--color-tertiary-100);
+  --color-success-border: var(--color-tertiary-300);
+  
+  /* Warning - Yellow/Amber */
+  --color-warning: #f59e0b;
+  --color-warning-rgb: 245, 158, 11;
+  --color-warning-bg: rgba(245, 158, 11, 0.1);
+  --color-warning-border: rgba(245, 158, 11, 0.3);
+  --color-warning-dark: rgba(120, 53, 15, 0.2);
+  
+  /* Error/Danger - Red */
+  --color-error: #ef4444;
+  --color-error-rgb: 239, 68, 68;
+  --color-error-bg: rgba(239, 68, 68, 0.1);
+  --color-error-border: rgba(239, 68, 68, 0.3);
+  --color-error-dark: rgba(127, 29, 29, 0.2);
+  
+  /* Info - Maps to Primary (Cyan) */
+  --color-info: var(--color-primary);
+  --color-info-rgb: var(--color-primary-rgb);
+  --color-info-bg: var(--color-primary-50);
+  --color-info-border: var(--color-primary-200);
+
+  /* ============================================
+     BACKGROUND COLORS
+     ============================================ */
+  
+  --bg-base: #0a0e27;
+  --bg-elevated: #111827;
+  --bg-surface: #1a1f3a;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --bg-card: rgba(31, 41, 55, 0.5);
+  --bg-input: rgba(17, 24, 39, 0.6);
+  --bg-hover: rgba(55, 65, 81, 0.5);
+
+  /* ============================================
+     TEXT COLORS
+     ============================================ */
+  
+  --text-primary: #ffffff;
+  --text-secondary: #e0e7ff;
+  --text-muted: #94a3b8;
+  --text-disabled: #64748b;
+  --text-inverse: #0a0e27;
+
+  /* ============================================
+     BORDER COLORS
+     ============================================ */
+  
+  --border-default: rgba(75, 85, 99, 0.5);
+  --border-subtle: rgba(55, 65, 81, 0.3);
+  --border-strong: rgba(107, 114, 128, 0.5);
+
+  /* ============================================
+     GLOW EFFECTS
+     ============================================ */
+  
+  --glow-primary: 0 0 10px rgba(var(--color-primary-rgb), 0.5), 0 0 20px rgba(var(--color-primary-rgb), 0.3);
+  --glow-secondary: 0 0 10px rgba(var(--color-secondary-rgb), 0.5), 0 0 20px rgba(var(--color-secondary-rgb), 0.3);
+  --glow-tertiary: 0 0 10px rgba(var(--color-tertiary-rgb), 0.5), 0 0 20px rgba(var(--color-tertiary-rgb), 0.3);
+  --glow-quaternary: 0 0 10px rgba(var(--color-quaternary-rgb), 0.5), 0 0 20px rgba(var(--color-quaternary-rgb), 0.3);
+
+  /* ============================================
+     SPACING
+     ============================================ */
+  
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.25rem;  /* 20px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+  --space-10: 2.5rem;  /* 40px */
+  --space-12: 3rem;    /* 48px */
+
+  /* ============================================
+     BORDER RADIUS
+     ============================================ */
+  
+  --radius-sm: 0.25rem;   /* 4px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-lg: 0.75rem;   /* 12px */
+  --radius-xl: 1rem;      /* 16px */
+  --radius-2xl: 1.5rem;   /* 24px */
+  --radius-full: 9999px;
+
+  /* ============================================
+     TYPOGRAPHY
+     ============================================ */
+  
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --font-display: 'Orbitron', 'Rajdhani', var(--font-mono);
+  
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.875rem;   /* 14px */
+  --text-base: 1rem;     /* 16px */
+  --text-lg: 1.125rem;   /* 18px */
+  --text-xl: 1.25rem;    /* 20px */
+  --text-2xl: 1.5rem;    /* 24px */
+  --text-3xl: 1.875rem;  /* 30px */
+
+  /* ============================================
+     TRANSITIONS
+     ============================================ */
+  
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* ============================================
+     Z-INDEX SCALE
+     ============================================ */
+  
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-fixed: 30;
+  --z-modal-backdrop: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-tooltip: 70;
+  --z-toast: 9999;
+}

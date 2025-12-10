@@ -39,6 +39,7 @@ import { Privacy } from './pages/Privacy';
 import { Terms } from './pages/Terms';
 import { Support } from './pages/Support';
 import { Documentation } from './pages/Documentation';
+import { StyleGuide } from './pages/StyleGuide';
 import { ScrollToTop } from './components/ScrollToTop';
 
 // Load dev tools in development mode (available at window.devTools)
@@ -1459,6 +1460,7 @@ function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/support" element={<Support />} />
           <Route path="/documentation" element={<Documentation />} />
+          <Route path="/styleguide" element={<StyleGuide />} />
           <Route path="*" element={
             <Landing
               onConnect={connectWallet}
@@ -1625,6 +1627,7 @@ function App() {
                 onError={handleError}
               />
             } />
+            <Route path="/styleguide" element={<StyleGuide />} />
           </Routes>
         </div>
 

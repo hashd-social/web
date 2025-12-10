@@ -45,28 +45,22 @@ export const SessionPersistenceToggle: React.FC<SessionPersistenceToggleProps> =
   };
   
   return (
-    <div className="bg-gray-800/50 rounded-lg p-6">
+    <div className="card">
       <div className="mb-4">
-        <div className="flex items-center gap-2 mb-2">
-          <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider font-mono">
-            Session Persistence
-          </h3>
-        </div>
-        <p className="text-sm text-gray-400">
-          Keep your session active until browser close
-        </p>
+        <h3 className="text-title mb-2">Session Persistence</h3>
+        <p className="text-body">Keep your session active until browser close</p>
       </div>
 
       <div className="space-y-4">
-        {/* Toggle */}
-        <div className="flex items-center justify-between p-4 bg-gray-900/50 rounded-lg">
+        {/* Toggle Row */}
+        <div className="flex-between p-4 bg-elevated rounded-lg">
           <div className="flex items-center gap-3">
-            <Lock className="w-5 h-5 text-cyan-400" />
+            <Lock className="w-5 h-5 text-neon-primary" />
             <div>
-              <p className="text-sm font-bold text-white font-mono">
+              <p className="text-data-highlight">
                 {isEnabled ? 'ENABLED' : 'DISABLED'}
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-muted">
                 {isEnabled 
                   ? 'Session persists until browser close' 
                   : 'PIN required on every refresh'}
@@ -75,40 +69,34 @@ export const SessionPersistenceToggle: React.FC<SessionPersistenceToggleProps> =
           </div>
           <button
             onClick={handleToggle}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              isEnabled ? 'bg-cyan-500' : 'bg-gray-600'
-            }`}
+            className={`btn-toggle ${isEnabled ? 'active' : ''}`}
+            aria-pressed={isEnabled}
           >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                isEnabled ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
+            <span className="btn-toggle-knob" />
           </button>
         </div>
 
-        {/* Info */}
-        <div className="p-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg">
-          <p className="text-xs text-gray-400 leading-relaxed">
-            <strong className="text-cyan-400">How it works:</strong> When enabled, your keyPair is stored 
+        {/* Info Alert */}
+        <div className="alert-info">
+          <p className="alert-text">
+            <strong className="text-info">How it works:</strong> When enabled, your keyPair is stored 
             in sessionStorage. You won't need to re-enter your PIN on page refresh, but the session 
             automatically clears when you close the browser.
           </p>
         </div>
 
+        {/* Success Alert (conditional) */}
         {isEnabled && (
-          <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+          <div className="alert-success">
             <div className="flex items-start gap-2">
-              <Check className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-green-300 leading-relaxed">
+              <Check className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
+              <p className="alert-text">
                 <strong>Active:</strong> Your session is stored in sessionStorage. 
                 Your PIN is never stored—only the keyPair for message encryption.
-              </div>
+              </p>
             </div>
           </div>
         )}
-
-      
       </div>
     </div>
   );
