@@ -7,8 +7,8 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Palette, Type, Square, MousePointer, AlertCircle, 
+import {
+  Palette, Type, Square, MousePointer, AlertCircle,
   CheckCircle, XCircle, Info, Bell, Tag, Layout,
   Sparkles, Box, FormInput, ToggleLeft, ChevronRight,
   Copy, Check, X, Shield, Zap, Gift, Lock, Mail, ArrowLeft
@@ -30,32 +30,41 @@ const sections = [
 // Code display component
 const CodeBlock: React.FC<{ code: string; className?: string }> = ({ code, className = '' }) => {
   const [copied, setCopied] = useState(false);
-  
+
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-  
+
   return (
     <div className={`relative group ${className}`}>
-      <pre className="text-xs text-muted bg-base p-3 rounded-lg overflow-x-auto border border-subtle">
-        <code>{code}</code>
+      <pre className="text-xs font-mono bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto border border-gray-700 shadow-lg">
+        <code className="font-mono">{code}</code>
       </pre>
-      <button 
+      <button
         onClick={handleCopy}
-        className="absolute top-2 right-2 btn-icon btn-icon-sm opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-2 right-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-mono opacity-0 group-hover:opacity-100 transition-opacity border border-gray-600"
+        title={copied ? 'Copied!' : 'Copy code'}
       >
-        {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+        {copied ? (
+          <span className="flex items-center gap-1">
+            <Check className="w-3 h-3" /> Copied
+          </span>
+        ) : (
+          <span className="flex items-center gap-1">
+            <Copy className="w-3 h-3" /> Copy
+          </span>
+        )}
       </button>
     </div>
   );
 };
 
 // Example wrapper component
-const Example: React.FC<{ 
-  title: string; 
-  code: string; 
+const Example: React.FC<{
+  title: string;
+  code: string;
   children: React.ReactNode;
   description?: string;
 }> = ({ title, code, children, description }) => (
@@ -94,24 +103,23 @@ export const StyleGuide: React.FC = () => {
               <button
                 key={id}
                 onClick={() => scrollToSection(id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-left ${
-                  activeSection === id 
-                    ? 'bg-primary-100 text-neon-primary border border-primary-300' 
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-left ${activeSection === id
+                    ? 'bg-primary-100 text-neon-primary border border-primary-300'
                     : 'text-muted hover:bg-hover hover:text-secondary'
-                }`}
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 <span className="text-sm font-mono">{label}</span>
               </button>
             ))}
           </nav>
-          
+
           <div className="mt-8 pt-6 border-t border-subtle">
             <p className="text-muted-sm mb-4">
               HASHD Design System v1.0
             </p>
-            <Link 
-              to="/" 
+            <Link
+              to="/"
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-muted hover:bg-hover hover:text-primary transition-all"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -122,14 +130,14 @@ export const StyleGuide: React.FC = () => {
 
         {/* Main Content */}
         <main className="flex-1 p-8 max-w-5xl">
-          
+
           {/* Colors Section */}
           <section id="colors" className="mb-16 scroll-mt-8">
             <div className="section-header">
               <Palette className="w-5 h-5 text-neon-primary" />
               <h2 className="text-title">Colors</h2>
             </div>
-            
+
             <h3 className="text-subtitle mb-4">Brand Colors (Primary to Quaternary)</h3>
             <div className="grid grid-cols-4 gap-4 mb-8">
               <div className="space-y-2">
@@ -214,8 +222,8 @@ export const StyleGuide: React.FC = () => {
               <h2 className="text-title">Typography</h2>
             </div>
 
-            <Example 
-              title="Titles" 
+            <Example
+              title="Titles"
               code={`<h1 class="text-title-xl">Extra Large Title</h1>
 <h1 class="text-title-lg">Large Title</h1>
 <h1 class="text-title">Section Title</h1>`}
@@ -227,8 +235,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Subtitles (Color Variants)" 
+            <Example
+              title="Subtitles (Color Variants)"
               code={`<h2 class="text-subtitle">Primary Subtitle</h2>
 <h2 class="text-subtitle-secondary">Secondary Subtitle</h2>
 <h2 class="text-subtitle-tertiary">Tertiary Subtitle</h2>
@@ -242,8 +250,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Body Text" 
+            <Example
+              title="Body Text"
               code={`<p class="text-body-lg">Large body text for important content.</p>
 <p class="text-body">Standard body text for descriptions and content.</p>
 <p class="text-muted">Muted helper text.</p>
@@ -257,8 +265,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Labels" 
+            <Example
+              title="Labels"
               code={`<label class="text-label">Standard Label</label>
 <label class="text-label-bar">Label with Bar Indicator</label>`}
             >
@@ -268,8 +276,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Data Display" 
+            <Example
+              title="Data Display"
               code={`<span class="text-data">0x1234567890abcdef1234567890abcdef12345678</span>
 <span class="text-data-highlight">Important Value: 1,234.56 ETH</span>`}
             >
@@ -279,8 +287,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Neon Text (with Glow)" 
+            <Example
+              title="Neon Text (with Glow)"
               code={`<span class="text-neon-primary">Glowing Cyan</span>
 <span class="text-neon-secondary">Glowing Magenta</span>
 <span class="text-neon-tertiary">Glowing Green</span>
@@ -294,8 +302,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Section Headers" 
+            <Example
+              title="Section Headers"
               code={`<div class="section-header">
   <Icon />
   <span class="text-subtitle">Section Title</span>
@@ -325,8 +333,8 @@ export const StyleGuide: React.FC = () => {
               <h2 className="text-title">Buttons</h2>
             </div>
 
-            <Example 
-              title="Primary Buttons" 
+            <Example
+              title="Primary Buttons"
               code={`<button class="btn btn-primary">Primary</button>
 <button class="btn btn-primary-solid">Primary Solid</button>`}
             >
@@ -336,8 +344,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Color Variants" 
+            <Example
+              title="Color Variants"
               code={`<button class="btn btn-primary">Primary</button>
 <button class="btn btn-secondary">Secondary</button>
 <button class="btn btn-tertiary">Tertiary</button>
@@ -351,8 +359,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Semantic Variants" 
+            <Example
+              title="Semantic Variants"
               code={`<button class="btn btn-danger">Danger</button>
 <button class="btn btn-warning">Warning</button>
 <button class="btn btn-ghost">Ghost</button>`}
@@ -364,8 +372,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Cyber Button (Animated)" 
+            <Example
+              title="Cyber Button (Animated)"
               code={`<button class="btn btn-cyber">Cyber Button</button>`}
               description="Special animated button for high-impact CTAs"
             >
@@ -375,8 +383,8 @@ export const StyleGuide: React.FC = () => {
               </button>
             </Example>
 
-            <Example 
-              title="Button Sizes" 
+            <Example
+              title="Button Sizes"
               code={`<button class="btn btn-primary btn-sm">Small</button>
 <button class="btn btn-primary">Default</button>
 <button class="btn btn-primary btn-lg">Large</button>`}
@@ -388,15 +396,15 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Full Width" 
+            <Example
+              title="Full Width"
               code={`<button class="btn btn-primary btn-block">Full Width Button</button>`}
             >
               <button className="btn btn-primary btn-block">Full Width Button</button>
             </Example>
 
-            <Example 
-              title="Icon Buttons" 
+            <Example
+              title="Icon Buttons"
               code={`<button class="btn-icon"><Icon /></button>
 <button class="btn-icon btn-icon-secondary"><Icon /></button>
 <button class="btn-icon btn-icon-tertiary"><Icon /></button>
@@ -410,8 +418,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Disabled State" 
+            <Example
+              title="Disabled State"
               code={`<button class="btn btn-primary" disabled>Disabled</button>`}
             >
               <div className="flex gap-4">
@@ -428,8 +436,8 @@ export const StyleGuide: React.FC = () => {
               <h2 className="text-title">Cards</h2>
             </div>
 
-            <Example 
-              title="Cards" 
+            <Example
+              title="Cards"
               code={`<div class="card">Default Card</div>
 <div class="card-interactive">Interactive Card (hover me)</div>`}
             >
@@ -445,8 +453,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Feature Cards" 
+            <Example
+              title="Feature Cards"
               code={`<div class="card-feature">Primary Feature</div>
 <div class="card-feature-secondary">Secondary Feature</div>
 <div class="card-feature-quaternary">Special Feature</div>`}
@@ -467,8 +475,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Stat Cards" 
+            <Example
+              title="Stat Cards"
               code={`<div class="card-stat">
   <div class="card-stat-label"><Icon /> Label</div>
   <div class="card-stat-value">1,234</div>
@@ -494,8 +502,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Data Rows" 
+            <Example
+              title="Data Rows"
               code={`<div class="data-row">
   <span class="data-row-label">Label</span>
   <span class="data-row-value">Value</span>
@@ -527,8 +535,8 @@ export const StyleGuide: React.FC = () => {
               <h2 className="text-title">Alerts</h2>
             </div>
 
-            <Example 
-              title="Full Alerts (with Title)" 
+            <Example
+              title="Full Alerts (with Title)"
               code={`<div class="alert-info">
   <h4 class="alert-title"><Icon /> Info Title</h4>
   <p class="alert-text">Info message text</p>
@@ -558,8 +566,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Inline Alerts (Compact)" 
+            <Example
+              title="Inline Alerts (Compact)"
               code={`<div class="alert-inline alert-inline-info">Info text</div>
 <div class="alert-inline alert-inline-success">Success text</div>
 <div class="alert-inline alert-inline-warning">Warning text</div>
@@ -593,8 +601,8 @@ export const StyleGuide: React.FC = () => {
               <h2 className="text-title">Inputs</h2>
             </div>
 
-            <Example 
-              title="Text Inputs" 
+            <Example
+              title="Text Inputs"
               code={`<input class="input" placeholder="Standard input" />
 <input class="input input-sm" placeholder="Small input" />
 <input class="input input-lg" placeholder="Large input" />`}
@@ -606,8 +614,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Input States" 
+            <Example
+              title="Input States"
               code={`<input class="input" placeholder="Default" />
 <input class="input input-error" placeholder="Error state" />
 <input class="input input-success" placeholder="Success state" />
@@ -621,15 +629,15 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Textarea" 
+            <Example
+              title="Textarea"
               code={`<textarea class="textarea" placeholder="Enter message..."></textarea>`}
             >
               <textarea className="textarea max-w-md" placeholder="Enter your message here..." />
             </Example>
 
-            <Example 
-              title="Select" 
+            <Example
+              title="Select"
               code={`<select class="select">
   <option>Option 1</option>
   <option>Option 2</option>
@@ -643,8 +651,8 @@ export const StyleGuide: React.FC = () => {
               </select>
             </Example>
 
-            <Example 
-              title="Checkbox" 
+            <Example
+              title="Checkbox"
               code={`<label class="checkbox-wrapper">
   <input type="checkbox" class="checkbox" />
   <span class="checkbox-label">Label</span>
@@ -662,14 +670,14 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Toggle" 
+            <Example
+              title="Toggle"
               code={`<button class="btn-toggle active">
   <span class="btn-toggle-knob"></span>
 </button>`}
             >
               <div className="flex items-center gap-4">
-                <button 
+                <button
                   className={`btn-toggle ${toggleState ? 'active' : ''}`}
                   onClick={() => setToggleState(!toggleState)}
                 >
@@ -687,8 +695,8 @@ export const StyleGuide: React.FC = () => {
               <h2 className="text-title">Badges</h2>
             </div>
 
-            <Example 
-              title="Color Variants" 
+            <Example
+              title="Color Variants"
               code={`<span class="badge badge-primary">Primary</span>
 <span class="badge badge-secondary">Secondary</span>
 <span class="badge badge-tertiary">Tertiary</span>
@@ -702,8 +710,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Semantic Variants" 
+            <Example
+              title="Semantic Variants"
               code={`<span class="badge badge-success">Success</span>
 <span class="badge badge-warning">Warning</span>
 <span class="badge badge-error">Error</span>
@@ -717,8 +725,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Pill Badges" 
+            <Example
+              title="Pill Badges"
               code={`<span class="badge badge-primary badge-pill">Pill Badge</span>`}
             >
               <div className="flex flex-wrap gap-3">
@@ -728,8 +736,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Status Badges" 
+            <Example
+              title="Status Badges"
               code={`<span class="badge-status badge-status-verified">Verified</span>
 <span class="badge-status badge-status-pending">Pending</span>
 <span class="badge-status badge-status-invalid">Invalid</span>`}
@@ -747,15 +755,15 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="HashdTag Badge" 
+            <Example
+              title="HashdTag Badge"
               code={`<span class="badge-hashdtag">HASHDTAG</span>`}
             >
               <span className="badge-hashdtag">HASHDTAG</span>
             </Example>
 
-            <Example 
-              title="Dot Indicators" 
+            <Example
+              title="Dot Indicators"
               code={`<span class="badge-dot"></span>
 <span class="badge-dot badge-dot-success"></span>
 <span class="badge-dot badge-dot-warning"></span>
@@ -794,8 +802,8 @@ export const StyleGuide: React.FC = () => {
               <h2 className="text-title">Modals</h2>
             </div>
 
-            <Example 
-              title="Modal Structure" 
+            <Example
+              title="Modal Structure"
               code={`<div class="modal-overlay">
   <div class="modal modal-2xl">
     <div class="modal-header">
@@ -861,15 +869,15 @@ export const StyleGuide: React.FC = () => {
               <h2 className="text-title">Utilities</h2>
             </div>
 
-            <Example 
-              title="Animations" 
+            <Example
+              title="Animations"
               code={`<div class="animate-fade-in">Fade In</div>
 <div class="animate-slide-up">Slide Up</div>
 <div class="animate-pulse">Pulse</div>
 <div class="animate-spin">Spin</div>`}
             >
               <div className="flex items-center gap-6">
-                <button 
+                <button
                   className="btn btn-secondary btn-sm"
                   onClick={() => setAnimationKey(k => k + 1)}
                 >
@@ -884,8 +892,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Glow Effects" 
+            <Example
+              title="Glow Effects"
               code={`<div class="glow-primary">Primary Glow</div>
 <div class="glow-secondary">Secondary Glow</div>
 <div class="glow-tertiary">Tertiary Glow</div>
@@ -899,8 +907,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Neon Borders" 
+            <Example
+              title="Neon Borders"
               code={`<div class="border-neon-primary">Primary (Cyan)</div>
 <div class="border-neon-secondary">Secondary (Magenta)</div>
 <div class="border-neon-tertiary">Tertiary (Green)</div>
@@ -914,8 +922,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Dividers" 
+            <Example
+              title="Dividers"
               code={`<div class="divider"></div>
 <div class="divider-faded"></div>`}
             >
@@ -928,8 +936,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Layout Helpers" 
+            <Example
+              title="Layout Helpers"
               code={`/* Flex utilities */
 .flex-center    /* center both axes */
 .flex-between   /* space-between */
@@ -972,8 +980,8 @@ export const StyleGuide: React.FC = () => {
               </div>
             </Example>
 
-            <Example 
-              title="Skeleton Loading" 
+            <Example
+              title="Skeleton Loading"
               code={`<div class="skeleton h-4 w-32"></div>
 <div class="skeleton h-8 w-full"></div>`}
             >

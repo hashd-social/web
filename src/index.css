@@ -2,8 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Semantic Design System */
-@import './styles/semantic/index.css';
+/* Semantic Design System is imported in index.tsx */
 
 /* Legacy theme (to be migrated) */
 @import './styles/cyberpunk-theme.css';
@@ -16,23 +15,24 @@
     background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
     min-height: 100vh;
   }
-  
+
   code {
     @apply font-mono;
   }
 }
 
 @layer components {
+
   /* Flat design components */
   .glass {
     @apply bg-white border border-neutral-200;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   }
-  
+
   .glass-card {
     @apply glass rounded-lg p-6 transition-all duration-200 hover:shadow-md;
   }
-  
+
   /* Button components - DEPRECATED: Use semantic buttons from styles/semantic/_buttons.css */
   /* .btn-primary {
     @apply inline-flex items-center justify-center px-4 py-2 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150;
@@ -45,73 +45,81 @@
   .btn-ghost {
     @apply inline-flex items-center justify-center px-4 py-2 text-neutral-600 font-medium rounded-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150;
   } */
-  
+
   /* Input components */
   .input-primary {
     @apply w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-neutral-100 disabled:cursor-not-allowed transition-colors duration-150;
   }
-  
+
   /* Card components - DEPRECATED: Use semantic .card from styles/semantic/_cards.css */
   /* .card {
     @apply bg-white rounded-lg shadow-sm border border-neutral-200 transition-shadow duration-150 hover:shadow-md;
   } */
-  
+
   /* Animation utilities */
   .animate-fade-in {
     animation: fadeIn 0.5s ease-in-out;
   }
-  
+
   .animate-slide-up {
     animation: slideUp 0.3s ease-out;
   }
-  
+
   .animate-slide-in-top {
     animation: slideInTop 0.3s ease-out;
   }
 }
 
 @layer utilities {
+
   /* Custom animations */
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
   }
-  
+
   @keyframes slideUp {
-    from { 
-      transform: translateY(10px); 
-      opacity: 0; 
+    from {
+      transform: translateY(10px);
+      opacity: 0;
     }
-    to { 
-      transform: translateY(0); 
-      opacity: 1; 
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
     }
   }
-  
+
   @keyframes slideInTop {
-    from { 
-      transform: translateY(-20px); 
-      opacity: 0; 
+    from {
+      transform: translateY(-20px);
+      opacity: 0;
     }
-    to { 
-      transform: translateY(0); 
-      opacity: 1; 
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
     }
   }
-  
+
   /* Gradient utilities */
   .bg-gradient-primary {
     background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
   }
-  
+
   .bg-gradient-secondary {
     background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
   }
-  
+
   .bg-gradient-dark {
     background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
   }
-  
+
   /* Cyberpunk font class */
   .font-cyberpunk {
     font-family: 'Orbitron', 'Rajdhani', 'JetBrains Mono', monospace;
@@ -120,4 +128,3 @@
     text-transform: uppercase;
   }
 }
-
