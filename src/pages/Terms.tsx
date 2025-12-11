@@ -124,7 +124,7 @@ export const Terms: React.FC = () => {
               Using HASHD requires paying blockchain gas fees. Additional fees may apply for:
             </p>
             <ul className="text-gray-300 font-mono leading-relaxed space-y-2 list-disc list-inside">
-              <li>Minting HashdTags</li>
+              <li>Minting HashIDs</li>
               <li>Creating Guilds</li>
               <li>Minting Guild NFTs</li>
             </ul>

@@ -62,7 +62,7 @@ export const Footer: React.FC<FooterProps> = ({ provider, showZeroTrust = false 
                     </div>
                     <h3 className="text-lg font-bold text-white mb-2 font-mono uppercase">Backend-Free</h3>
                     <p className="text-gray-400 text-sm font-mono leading-relaxed">
-                      Pure client + chain + IPFS. No servers to seize, block, or fail. The stack stands even if the website disappears.
+                      Pure client + chain + ByteCave. No servers to seize, block, or fail. The stack stands even if the website disappears.
                     </p>
                   </div>
 

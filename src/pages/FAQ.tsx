@@ -16,7 +16,7 @@ export const FAQ: React.FC = () => {
     {
       category: 'General',
       question: 'What is HASHD?',
-      answer: 'HASHD is a sovereign communication protocol built on MegaETH, enabling encrypted messaging, user-owned identity, autonomous Guilds, and censorship-resistant marketplaces. No admins, no servers, no dependencies — just cryptography, IPFS, and smart contracts.'
+      answer: 'HASHD is a sovereign communication protocol built on MegaETH, enabling encrypted messaging, user-owned identity, autonomous Guilds, and censorship-resistant marketplaces. No admins, no servers, no dependencies — just cryptography, the ByteCave, and smart contracts.'
     },
     {
       category: 'General',
@@ -39,24 +39,24 @@ export const FAQ: React.FC = () => {
       answer: 'HASHD is created by Alexx Shadow, a seasoned web3 and AI developer. Alexx has created numerous apps in the web3 space since 2021 and was previously the CTO of Quantum Art.'
     },
     {
-      category: 'HashdTags',
-      question: 'What are HASHDTags?',
-      answer: 'HASHDTags are NFT-backed, human-readable identities (e.g., alexx@hashd) mapped directly to your encryption keys. They act as portable endpoints across the HASHD network.'
+      category: 'HashIDs',
+      question: 'What are HashIDs?',
+      answer: 'HashIDs are NFT-backed, human-readable identities (e.g., alexx@hashd) mapped directly to your encryption keys. They act as portable endpoints across the HASHD network.'
     },
     {
-      category: 'HashdTags',
-      question: 'Do HASHDTags expire?',
-      answer: 'No. There are no renewals. When you mint a TAG, you own it outright.'
+      category: 'HashIDs',
+      question: 'Do HashIDs expire?',
+      answer: 'No. There are no renewals. When you mint a HashID, you own it outright.'
     },
     {
-      category: 'HashdTags',
-      question: 'How many characters can my HASHDTag have?',
-      answer: 'Tags 5+ characters: first one is free per wallet. Premium 1–4 character tags are released separately.'
+      category: 'HashIDs',
+      question: 'How many characters can my HashID have?',
+      answer: 'HashIDs 5+ characters: first one is free per wallet. Premium 1–4 character HashIDs are released separately.'
     },
     {
-      category: 'HashdTags',
-      question: 'Can I use my HASHDTag across apps?',
-      answer: 'Yes. HASHDTags are protocol-native identifiers usable across all HASHD interfaces and partner dApps.'
+      category: 'HashIDs',
+      question: 'Can I use my HashID across apps?',
+      answer: 'Yes. HashIDs are protocol-native identifiers usable across all HASHD interfaces and partner dApps.'
     },
     {
       category: 'Messaging',
@@ -66,7 +66,7 @@ export const FAQ: React.FC = () => {
     {
       category: 'Messaging',
       question: 'Is any message data stored on centralized servers?',
-      answer: 'No. Message content is stored encrypted on IPFS. Metadata is kept minimal and stored on-chain, but never exposes content.'
+      answer: 'No. Message content is stored encrypted in the ByteCave. Metadata is kept minimal and stored on-chain, but never exposes content.'
     },
     {
       category: 'Messaging',
@@ -76,7 +76,7 @@ export const FAQ: React.FC = () => {
     {
       category: 'Messaging',
       question: 'Can I have multiple mailboxes?',
-      answer: 'Yes. A single wallet can generate unlimited independent identities: work, personal, trading, anonymous, Guild-specific, etc. Each mailbox gets its own deterministic keypair and HASHDTag.'
+      answer: 'Yes. A single wallet can generate unlimited independent identities: work, personal, trading, anonymous, Guild-specific, etc. Each mailbox gets its own deterministic keypair and HashID.'
     },
     {
       category: 'Messaging',
@@ -96,12 +96,12 @@ export const FAQ: React.FC = () => {
     {
       category: 'Guilds',
       question: 'What are Guilds?',
-      answer: 'Guilds are autonomous, encrypted communities built entirely from smart contracts and IPFS — not servers or moderators.'
+      answer: 'Guilds are autonomous, encrypted communities built entirely from smart contracts and the ByteCave — not servers or moderators.'
     },
     {
       category: 'Guilds',
       question: 'Can a Guild be taken down?',
-      answer: 'No. Guild content is encrypted and lives on IPFS. Even if HASHD hides a Guild on the official frontend, the data stays accessible, mirrorable, and forkable.'
+      answer: 'No. Guild content is encrypted and lives in the ByteCave. Even if HASHD hides a Guild on the official frontend, the data stays accessible, mirrorable, and forkable.'
     },
     {
       category: 'Guilds',
@@ -116,12 +116,12 @@ export const FAQ: React.FC = () => {
     {
       category: 'Guilds',
       question: 'Where is Guild content stored?',
-      answer: 'As ciphertext on IPFS. Even relayers only touch encrypted blobs.'
+      answer: 'As ciphertext in the ByteCave. Even relayers only touch encrypted blobs.'
     },
     {
       category: 'Marketplaces',
       question: 'What makes HASHD marketplaces censorship-resistant?',
-      answer: 'Listings, messages, and metadata are all encrypted, stored on IPFS, and mediated by smart contracts. No platform — including HASHD — can delist or shadow-ban anything.'
+      answer: 'Listings, messages, and metadata are all encrypted, stored in the ByteCave, and mediated by smart contracts. No platform — including HASHD — can delist or shadow-ban anything.'
     },
     {
       category: 'Marketplaces',
@@ -151,7 +151,7 @@ export const FAQ: React.FC = () => {
     {
       category: 'Frontend',
       question: 'Can I customize the UI?',
-      answer: 'Yes — through a secure extension layer that preserves the verified core. Users can: Apply custom themes, inject UI modules from trusted gists, change discovery filters and visibility, set their own IPFS gateways, and choose RPC endpoints. All without breaking security guarantees.'
+      answer: 'Yes — through a secure extension layer that preserves the verified core. Users can: Apply custom themes, inject UI modules from trusted gists, change discovery filters and visibility, connect to different ByteCave nodes, and choose RPC endpoints. All without breaking security guarantees.'
     },
     {
       category: 'Frontend',
@@ -161,7 +161,12 @@ export const FAQ: React.FC = () => {
     {
       category: 'Frontend',
       question: 'What is "Legal Safety Mode"?',
-      answer: 'Legal Safety Mode is a lightweight, optional filter layer used only on the official HASHD frontend. It prevents the official site from loading certain content that may be illegal, high-risk, or require moderation under real-world compliance rules. This filter does not touch the protocol, does not remove anything from IPFS, and does not affect what mirrors, custom clients, or third-party frontends can display. It simply tells the official UI to hide specific Guilds, posts, listings, or users based on a publicly visible "safety list." The protocol remains fully sovereign and censorship-resistant. Legal Safety Mode exists solely to protect the official website and its operators from liability while giving users complete freedom to run unfiltered mirrors if they choose.'
+      answer: 'Legal Safety Mode is a lightweight, optional filter layer used only on the official HASHD frontend. It prevents the official site from loading certain content that may be illegal, high-risk, or require moderation under real-world compliance rules. This filter does not touch the protocol, does not remove anything from the ByteCave, and does not affect what mirrors, custom clients, or third-party frontends can display. It simply tells the official UI to hide specific Guilds, posts, listings, or users based on a publicly visible "safety list." The protocol remains fully sovereign and censorship-resistant. Legal Safety Mode exists solely to protect the official website and its operators from liability while giving users complete freedom to run unfiltered mirrors if they choose.'
+    },
+    {
+      category: 'Architecture',
+      question: 'What is the ByteCave?',
+      answer: 'The ByteCave is HASHD\'s encrypted storage layer — a decentralized network of independent nodes that store nothing but ciphertext. Every message, post, and listing is encrypted locally on your device before upload. Because nodes only ever see ciphertext, your data remains private, sovereign, and impossible for third parties to interpret or censor. Each blob is addressed by its content hash, meaning the network doesn\'t need directories, usernames, or databases. Nodes independently replicate data, generate cryptographic proofs, and can be swapped without disrupting the network. The ByteCave gives HASHD the durability of decentralized storage with the responsiveness of a modern application.'
     },
     {
       category: 'Architecture',
@@ -171,7 +176,7 @@ export const FAQ: React.FC = () => {
     {
       category: 'Architecture',
       question: 'How can I access HASHD?',
-      answer: 'Any of the following: Official site (hashd.social), IPFS bundle, localhost build from GitHub, a community mirror, a fully custom client, or another dApp integrating HASHD contracts. Everything that matters is on-chain, on IPFS, or inside your wallet.'
+      answer: 'Any of the following: Official site (hashd.social), localhost build from GitHub, a community mirror, a fully custom client, or another dApp integrating HASHD contracts. Everything that matters is on-chain, in the ByteCave, or inside your wallet.'
     },
     {
       category: 'ZeroSig Sessions',
@@ -196,7 +201,7 @@ export const FAQ: React.FC = () => {
     {
       category: 'Security',
       question: 'What happens if HASHD goes offline?',
-      answer: 'Nothing breaks. HASHD has no servers or backend infrastructure to go offline. The protocol runs entirely on MegaETH smart contracts and IPFS. Your messages, Guilds, identities, and data all remain accessible through: the blockchain (always available), IPFS (decentralized storage), any mirror site, a localhost build from GitHub, or a custom client you build yourself. Even if hashd.social disappeared completely, the entire protocol would continue functioning without interruption.'
+      answer: 'Nothing breaks. HASHD has no servers or backend infrastructure to go offline. The protocol runs entirely on MegaETH smart contracts and the ByteCave. Your messages, Guilds, identities, and data all remain accessible through: the blockchain (always available), the ByteCave (decentralized storage), any mirror site, a localhost build from GitHub, or a custom client you build yourself. Even if hashd.social disappeared completely, the entire protocol would continue functioning without interruption.'
     },
     {
       category: 'Security',
@@ -211,7 +216,7 @@ export const FAQ: React.FC = () => {
     {
       category: 'Launch',
       question: 'How do I get early access?',
-      answer: 'Join the waitlist at https://hashd.social. Participants will get early access to the the beta test site, and the ability to register their HASHDtags ahead of the crowd. There will also be consideration regarding our official token Airdrop'
+      answer: 'Join the waitlist at https://hashd.social. Participants will get early access to the the beta test site, and the ability to register their HashIDs ahead of the crowd. There will also be consideration regarding our official token Airdrop'
     },
     {
       category: 'Launch',

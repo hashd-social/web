@@ -1907,7 +1907,7 @@ export class ContractService {
         provider
       );
 
-      // Get all HashdTags for this address
+      // Get all HashIDs for this address
       const hashdTags = await this.getOwnerHashdTags(ownerAddress);
       
       const nfts = [];
