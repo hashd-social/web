@@ -1,7 +1,7 @@
 /**
- * Attach HashdTag Modal
+ * Attach HashID Modal
  * 
- * Modal for selecting which account to attach a HashdTag NFT to
+ * Modal for selecting which account to attach a HashID NFT to
  */
 
 import React, { useState, useEffect } from 'react';
@@ -17,7 +17,7 @@ interface AvailableAccount {
   displayName: string;
 }
 
-interface AttachHashdTagModalProps {
+interface AttachHashIDModalProps {
   isOpen: boolean;
   onClose: () => void;
   fullName: string;
@@ -25,7 +25,7 @@ interface AttachHashdTagModalProps {
   onSuccess: () => void;
 }
 
-export const AttachHashdTagModal: React.FC<AttachHashdTagModalProps> = ({
+export const AttachHashIDModal: React.FC<AttachHashIDModalProps> = ({
   isOpen,
   onClose,
   fullName,
@@ -63,7 +63,7 @@ export const AttachHashdTagModal: React.FC<AttachHashdTagModalProps> = ({
       const accounts: AvailableAccount[] = [];
       for (let i = 0; i < accountCount; i++) {
         const account = await contractService.getAccount(userAddress, i);
-        if (account.isActive && !account.hasHashdTagAttached) {
+        if (account.isActive && !account.hasHashIDAttached) {
           const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
           const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
           accounts.push({
@@ -76,7 +76,7 @@ export const AttachHashdTagModal: React.FC<AttachHashdTagModalProps> = ({
       }
       
       if (accounts.length === 0) {
-        setError('No available accounts. All your accounts already have HashdTags attached.');
+        setError('No available accounts. All your accounts already have HashIDs attached.');
       }
       
       setAvailableAccounts(accounts);
@@ -102,14 +102,14 @@ export const AttachHashdTagModal: React.FC<AttachHashdTagModalProps> = ({
       setProcessing(true);
       setError(null);
       
-      const tx = await contractService.attachHashdTag(fullName, selectedAccount.publicKey);
+      const tx = await contractService.attachHashID(fullName, selectedAccount.publicKey);
       await tx.wait();
       
       onSuccess();
       onClose();
     } catch (err: any) {
-      console.error('Error attaching HashdTag:', err);
-      setError(err.message || 'Failed to attach HashdTag');
+      console.error('Error attaching HashID:', err);
+      setError(err.message || 'Failed to attach HashID');
     } finally {
       setProcessing(false);
     }
@@ -119,7 +119,7 @@ export const AttachHashdTagModal: React.FC<AttachHashdTagModalProps> = ({
     <NeonModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Attach HashdTag"
+      title="Attach HashID"
       icon={Link2}
       maxWidth="md"
     >
@@ -139,7 +139,7 @@ export const AttachHashdTagModal: React.FC<AttachHashdTagModalProps> = ({
               No available accounts found.
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              All your accounts already have HashdTags attached.
+              All your accounts already have HashIDs attached.
             </p>
           </div>
         ) : (

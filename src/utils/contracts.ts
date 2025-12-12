@@ -60,26 +60,26 @@ export const HASHD_ABI = [
 export const ACCOUNT_REGISTRY_ABI = [
   // Unified account functions
   "function registerAccount(bytes publicKey)",
-  "function registerAccountWithHashdTag(string name, string domain, bytes publicKey) payable",
+  "function registerAccountWithHashID(string name, string domain, bytes publicKey) payable",
   "function updateAccountKey(uint256 index, bytes newPublicKey)",
-  "function updateHashdTagAccountKey(string fullName, bytes newPublicKey)",
-  "function getAccount(address owner, uint256 index) view returns (bytes publicKey, uint256 createdAt, bool isActive, bool hasHashdTagAttached, string hashdTagName, uint256 hashdTagTokenId)",
-  "function getAccounts(address owner) view returns (tuple(bytes publicKey, uint256 createdAt, bool isActive, bool hasHashdTagAttached, string hashdTagName, uint256 hashdTagTokenId)[])",
+  "function updateHashIDAccountKey(string fullName, bytes newPublicKey)",
+  "function getAccount(address owner, uint256 index) view returns (bytes publicKey, uint256 createdAt, bool isActive, bool hasHashIDAttached, string hashIDName, uint256 hashIDTokenId)",
+  "function getAccounts(address owner) view returns (tuple(bytes publicKey, uint256 createdAt, bool isActive, bool hasHashIDAttached, string hashIDName, uint256 hashIDTokenId)[])",
   "function getAccountCount(address owner) view returns (uint256)",
   "function hasAccount(address owner) view returns (bool)",
   
-  // HashdTag functions
-  "function getHashdTagAccount(string fullName) view returns (bytes publicKey, address owner, uint256 timestamp, bool isActive)",
+  // HashID functions
+  "function getHashIDAccount(string fullName) view returns (bytes publicKey, address owner, uint256 timestamp, bool isActive)",
   "function getPublicKeyByName(string fullName) view returns (bytes)",
   "function isNameAvailable(string name, string domain) view returns (bool)",
-  "function getOwnerHashdTags(address owner) view returns (string[])",
-  "function getPrimaryHashdTag(address owner) view returns (string)",
+  "function getOwnerHashIDs(address owner) view returns (string[])",
+  "function getPrimaryHashID(address owner) view returns (string)",
   "function calculateNameFee(string name, string domain) view returns (uint256)",
-  "function isHashdTagAttached(string fullName) view returns (bool)",
+  "function isHashIDAttached(string fullName) view returns (bool)",
   
   // Attachment functions
-  "function attachHashdTag(string fullName, bytes accountPublicKey)",
-  "function detachHashdTag(string fullName)",
+  "function attachHashID(string fullName, bytes accountPublicKey)",
+  "function detachHashID(string fullName)",
   
   // Domain management
   "function getAvailableDomains() view returns (string[])",
@@ -326,7 +326,7 @@ export const ERC20_ABI = [
   "function bondingCurveSupply() view returns (uint256)"
 ];
 
-export const HASHD_TAG_ABI = [
+export const HASHD_ID_ABI = [
   // ERC721 Standard
   "function balanceOf(address owner) view returns (uint256)",
   "function ownerOf(uint256 tokenId) view returns (address)",
@@ -336,15 +336,15 @@ export const HASHD_TAG_ABI = [
   "function transferFrom(address from, address to, uint256 tokenId)",
   "function safeTransferFrom(address from, address to, uint256 tokenId)",
   
-  // HashdTag specific
+  // HashID specific
   "function tokenIdToName(uint256 tokenId) view returns (string)",
   "function tokenIdToDomain(uint256 tokenId) view returns (string)",
   "function domainColors(string domain) view returns (string)",
   "function accountRegistry() view returns (address)",
   
   // Events
-  "event HashdTagMinted(address indexed owner, uint256 indexed tokenId, string name, string domain)",
-  "event HashdTagTransferred(address indexed from, address indexed to, uint256 indexed tokenId, string name)",
+  "event HashIDMinted(address indexed owner, uint256 indexed tokenId, string name, string domain)",
+  "event HashIDTransferred(address indexed from, address indexed to, uint256 indexed tokenId, string name)",
   "event DomainColorUpdated(string indexed domain, string color)"
 ];
 
@@ -1121,9 +1121,9 @@ export class ContractService {
     publicKey: string;
     createdAt: bigint;
     isActive: boolean;
-    hasHashdTagAttached: boolean;
-    hashdTagName: string;
-    hashdTagTokenId: bigint;
+    hasHashIDAttached: boolean;
+    hashIDName: string;
+    hashIDTokenId: bigint;
   }> {
     if (!this.contracts.accountRegistry) throw new Error('AccountRegistry not initialized');
     const result = await this.contracts.accountRegistry.getAccount(address, index);
@@ -1131,9 +1131,9 @@ export class ContractService {
       publicKey: result[0],
       createdAt: result[1],
       isActive: result[2],
-      hasHashdTagAttached: result[3],
-      hashdTagName: result[4],
-      hashdTagTokenId: result[5]
+      hasHashIDAttached: result[3],
+      hashIDName: result[4],
+      hashIDTokenId: result[5]
     };
   }
 
@@ -1142,9 +1142,9 @@ export class ContractService {
     publicKey: string;
     createdAt: bigint;
     isActive: boolean;
-    hasHashdTagAttached: boolean;
-    hashdTagName: string;
-    hashdTagTokenId: bigint;
+    hasHashIDAttached: boolean;
+    hashIDName: string;
+    hashIDTokenId: bigint;
   }>> {
     if (!this.contracts.accountRegistry) {
       throw new Error('AccountRegistry not initialized - call initializeReadOnlyContracts() first');
@@ -1154,9 +1154,9 @@ export class ContractService {
       publicKey: account[0],
       createdAt: account[1],
       isActive: account[2],
-      hasHashdTagAttached: account[3],
-      hashdTagName: account[4],
-      hashdTagTokenId: account[5]
+      hasHashIDAttached: account[3],
+      hashIDName: account[4],
+      hashIDTokenId: account[5]
     }));
   }
 
@@ -1180,8 +1180,8 @@ export class ContractService {
     return await this.contracts.accountRegistry.updateBareAccountKey(index, publicKey);
   }
 
-  // AccountRegistry methods - Named Accounts with HashdTag (PAID)
-  async registerAccountWithHashdTag(name: string, domain: string, publicKey: string, feeInWei: bigint): Promise<ethers.ContractTransactionResponse> {
+  // AccountRegistry methods - Named Accounts with HashID (PAID)
+  async registerAccountWithHashID(name: string, domain: string, publicKey: string, feeInWei: bigint): Promise<ethers.ContractTransactionResponse> {
     if (!this.contracts.accountRegistry) {
       console.error('❌ AccountRegistry not initialized!');
       console.error('Signer:', !!this.signer);
@@ -1192,11 +1192,11 @@ export class ContractService {
     
     // Estimate gas and add 20% buffer (this will also validate the transaction)
     try {
-      const estimatedGas = await this.contracts.accountRegistry.registerAccountWithHashdTag.estimateGas(name, domain, publicKey, { value: feeInWei });
+      const estimatedGas = await this.contracts.accountRegistry.registerAccountWithHashID.estimateGas(name, domain, publicKey, { value: feeInWei });
       const gasLimit = (estimatedGas * BigInt(120)) / BigInt(100); // 20% buffer
       console.log(`⛽ Gas estimate: ${estimatedGas.toString()}, using limit: ${gasLimit.toString()}`);
       
-      return await this.contracts.accountRegistry.registerAccountWithHashdTag(name, domain, publicKey, { 
+      return await this.contracts.accountRegistry.registerAccountWithHashID(name, domain, publicKey, { 
         value: feeInWei,
         gasLimit 
       });
@@ -1237,7 +1237,7 @@ export class ContractService {
     }
   }
 
-  async getHashdTagAccount(fullName: string): Promise<{
+  async getHashIDAccount(fullName: string): Promise<{
     publicKey: string;
     owner: string;
     timestamp: bigint;
@@ -1250,7 +1250,7 @@ export class ContractService {
       ACCOUNT_REGISTRY_ABI,
       provider
     );
-    const result = await accountRegistry.getHashdTagAccount(fullName);
+    const result = await accountRegistry.getHashIDAccount(fullName);
     return {
       publicKey: result[0],
       owner: result[1],
@@ -1303,7 +1303,7 @@ export class ContractService {
     return await accountRegistry.isNameAvailable(name, domain);
   }
 
-  async getOwnerHashdTags(address: string): Promise<string[]> {
+  async getOwnerHashIDs(address: string): Promise<string[]> {
     // Use fast read provider for this read-only operation
     const provider = this.getReadProvider();
     const accountRegistry = new ethers.Contract(
@@ -1311,7 +1311,7 @@ export class ContractService {
       ACCOUNT_REGISTRY_ABI,
       provider
     );
-    return await accountRegistry.getOwnerHashdTags(address);
+    return await accountRegistry.getOwnerHashIDs(address);
   }
 
 
@@ -1891,9 +1891,9 @@ export class ContractService {
   // ============================================
 
   /**
-   * Get all HashdTag NFTs owned by an address
+   * Get all HashID NFTs owned by an address
    */
-  async getHashdTagNFTs(ownerAddress: string): Promise<Array<{
+  async getHashIDNFTs(ownerAddress: string): Promise<Array<{
     tokenId: string;
     fullName: string;
     domain: string;
@@ -1901,31 +1901,31 @@ export class ContractService {
   }>> {
     try {
       const provider = this.getReadProvider();
-      const hashdTag = new ethers.Contract(
+      const hashID = new ethers.Contract(
         CONTRACT_ADDRESSES.HASHD_TAG,
-        HASHD_TAG_ABI,
+        HASHD_ID_ABI,
         provider
       );
 
       // Get all HashIDs for this address
-      const hashdTags = await this.getOwnerHashdTags(ownerAddress);
+      const hashIDs = await this.getOwnerHashIDs(ownerAddress);
       
       const nfts = [];
       
-      for (const fullName of hashdTags) {
+      for (const fullName of hashIDs) {
         try {
           // Generate token ID from full name (same as contract does)
           const tokenId = ethers.keccak256(ethers.toUtf8Bytes(fullName));
           
           // Verify this address owns the NFT
-          const owner = await hashdTag.ownerOf(tokenId);
+          const owner = await hashID.ownerOf(tokenId);
           
           if (owner.toLowerCase() === ownerAddress.toLowerCase()) {
             // Get token URI (contains metadata)
-            const tokenURI = await hashdTag.tokenURI(tokenId);
+            const tokenURI = await hashID.tokenURI(tokenId);
             
             // Get domain
-            const domain = await hashdTag.tokenIdToDomain(tokenId);
+            const domain = await hashID.tokenIdToDomain(tokenId);
             
             nfts.push({
               tokenId,
@@ -1941,50 +1941,50 @@ export class ContractService {
       
       return nfts;
     } catch (error) {
-      console.error('Error fetching HashdTag NFTs:', error);
+      console.error('Error fetching HashID NFTs:', error);
       return [];
     }
   }
 
   /**
-   * Get HashdTag NFT balance for an address
+   * Get HashID NFT balance for an address
    */
-  async getHashdTagBalance(ownerAddress: string): Promise<number> {
+  async getHashIDBalance(ownerAddress: string): Promise<number> {
     try {
       const provider = this.getReadProvider();
-      const hashdTag = new ethers.Contract(
+      const hashID = new ethers.Contract(
         CONTRACT_ADDRESSES.HASHD_TAG,
-        HASHD_TAG_ABI,
+        HASHD_ID_ABI,
         provider
       );
       
-      const balance = await hashdTag.balanceOf(ownerAddress);
+      const balance = await hashID.balanceOf(ownerAddress);
       return Number(balance);
     } catch (error) {
-      console.error('Error fetching HashdTag balance:', error);
+      console.error('Error fetching HashID balance:', error);
       return 0;
     }
   }
 
   /**
-   * Get HashdTag NFT metadata by token ID
+   * Get HashID NFT metadata by token ID
    */
-  async getHashdTagMetadata(tokenId: string): Promise<{
+  async getHashIDMetadata(tokenId: string): Promise<{
     fullName: string;
     domain: string;
     tokenURI: string;
   } | null> {
     try {
       const provider = this.getReadProvider();
-      const hashdTag = new ethers.Contract(
+      const hashID = new ethers.Contract(
         CONTRACT_ADDRESSES.HASHD_TAG,
-        HASHD_TAG_ABI,
+        HASHD_ID_ABI,
         provider
       );
       
-      const fullName = await hashdTag.tokenIdToName(tokenId);
-      const domain = await hashdTag.tokenIdToDomain(tokenId);
-      const tokenURI = await hashdTag.tokenURI(tokenId);
+      const fullName = await hashID.tokenIdToName(tokenId);
+      const domain = await hashID.tokenIdToDomain(tokenId);
+      const tokenURI = await hashID.tokenURI(tokenId);
       
       return {
         fullName,
@@ -1992,15 +1992,15 @@ export class ContractService {
         tokenURI
       };
     } catch (error) {
-      console.error('Error fetching HashdTag metadata:', error);
+      console.error('Error fetching HashID metadata:', error);
       return null;
     }
   }
 
   /**
-   * Check if a HashdTag is attached to an account
+   * Check if a HashID is attached to an account
    */
-  async isHashdTagAttached(fullName: string): Promise<boolean> {
+  async isHashIDAttached(fullName: string): Promise<boolean> {
     try {
       const provider = this.getReadProvider();
       const accountRegistry = new ethers.Contract(
@@ -2009,17 +2009,17 @@ export class ContractService {
         provider
       );
       
-      return await accountRegistry.isHashdTagAttached(fullName);
+      return await accountRegistry.isHashIDAttached(fullName);
     } catch (error) {
-      console.error('Error checking HashdTag attachment:', error);
+      console.error('Error checking HashID attachment:', error);
       return false;
     }
   }
 
   /**
-   * Detach a HashdTag from an account
+   * Detach a HashID from an account
    */
-  async detachHashdTag(fullName: string): Promise<ethers.ContractTransactionResponse> {
+  async detachHashID(fullName: string): Promise<ethers.ContractTransactionResponse> {
     // Ensure we have a signer - try to get it if not available
     if (!this.signer) {
       console.log('🔄 Signer not available, attempting to reconnect...');
@@ -2035,13 +2035,13 @@ export class ContractService {
       this.signer
     );
     
-    return await accountRegistry.detachHashdTag(fullName);
+    return await accountRegistry.detachHashID(fullName);
   }
 
   /**
-   * Attach a HashdTag to a bare account
+   * Attach a HashID to a bare account
    */
-  async attachHashdTag(fullName: string, bareAccountPublicKey: string): Promise<ethers.ContractTransactionResponse> {
+  async attachHashID(fullName: string, bareAccountPublicKey: string): Promise<ethers.ContractTransactionResponse> {
     // Ensure we have a signer - try to get it if not available
     if (!this.signer) {
       console.log('🔄 Signer not available, attempting to reconnect...');
@@ -2057,13 +2057,13 @@ export class ContractService {
       this.signer
     );
     
-    return await accountRegistry.attachHashdTag(fullName, bareAccountPublicKey);
+    return await accountRegistry.attachHashID(fullName, bareAccountPublicKey);
   }
 
   /**
-   * Transfer a HashdTag NFT to another address
+   * Transfer a HashID NFT to another address
    */
-  async transferHashdTag(fromAddress: string, toAddress: string, tokenId: string): Promise<ethers.ContractTransactionResponse> {
+  async transferHashID(fromAddress: string, toAddress: string, tokenId: string): Promise<ethers.ContractTransactionResponse> {
     // Ensure we have a signer - try to get it if not available
     if (!this.signer) {
       console.log('🔄 Signer not available, attempting to reconnect...');
@@ -2073,13 +2073,13 @@ export class ContractService {
       }
     }
     
-    const hashdTag = new ethers.Contract(
+    const hashID = new ethers.Contract(
       CONTRACT_ADDRESSES.HASHD_TAG,
-      HASHD_TAG_ABI,
+      HASHD_ID_ABI,
       this.signer
     );
     
-    return await hashdTag.transferFrom(fromAddress, toAddress, tokenId);
+    return await hashID.transferFrom(fromAddress, toAddress, tokenId);
   }
 }
 

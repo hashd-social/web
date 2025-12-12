@@ -6,7 +6,7 @@ import { contractService } from '../utils/contracts';
 import {
   CurrentMailbox,
   LinkedMailboxes,
-  HashdTagNFTs,
+  HashIDNFTs,
   HowMailboxesWork
 } from '../components/account';
 
@@ -37,13 +37,13 @@ export const Account: React.FC<AccountProps> = ({
   onSwitchMailbox,
   onRefreshMailboxes,
 }) => {
-  const [blockchainAccounts, setBlockchainAccounts] = useState<{name: string, type: 'named' | 'bare', publicKey?: string, hasHashdTagAttached?: boolean}[]>([]);
+  const [blockchainAccounts, setBlockchainAccounts] = useState<{name: string, type: 'named' | 'bare', publicKey?: string, hasHashIDAttached?: boolean}[]>([]);
 
   // Fetch named and bare accounts from blockchain
   const fetchAccounts = async () => {
       if (!userAddress) return;
       
-      const accounts: {name: string, type: 'named' | 'bare', publicKey?: string, hasHashdTagAttached?: boolean}[] = [];
+      const accounts: {name: string, type: 'named' | 'bare', publicKey?: string, hasHashIDAttached?: boolean}[] = [];
       
       try {
         // First, fetch all accounts from AccountRegistry (source of truth for active accounts)
@@ -52,29 +52,29 @@ export const Account: React.FC<AccountProps> = ({
         
         for (let i = 0; i < accountCount; i++) {
           const account = await contractService.getAccount(userAddress, i);
-          console.log(`  [${i}] ${account.isActive ? '✅ ACTIVE' : '❌ INACTIVE'} hasHashdTag: ${account.hasHashdTagAttached} - publicKey:`, account.publicKey);
+          console.log(`  [${i}] ${account.isActive ? '✅ ACTIVE' : '❌ INACTIVE'} hasHashID: ${account.hasHashIDAttached} - publicKey:`, account.publicKey);
           
           if (account.isActive) {
-            if (account.hasHashdTagAttached && account.hashdTagName) {
-              // Named account with attached HashdTag
+            if (account.hasHashIDAttached && account.hashIDName) {
+              // Named account with attached HashID
               accounts.push({ 
-                name: account.hashdTagName, 
+                name: account.hashIDName, 
                 type: 'named',
                 publicKey: account.publicKey,
-                hasHashdTagAttached: true
+                hasHashIDAttached: true
               });
-              console.log(`✅ Added named account: ${account.hashdTagName}`);
+              console.log(`✅ Added named account: ${account.hashIDName}`);
             } else {
-              // Bare account (no HashdTag attached)
+              // Bare account (no HashID attached)
               const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
               const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
               const localMailbox = mailboxes.find(m => m.publicKeyHash === publicKeyHash);
               
-              // If localStorage has a HashdTag-style name (contains @) but blockchain says it's bare,
-              // the HashdTag was detached - update localStorage to show "Bare Account"
+              // If localStorage has a HashID-style name (contains @) but blockchain says it's bare,
+              // the HashID was detached - update localStorage to show "Bare Account"
               let displayName = localMailbox?.name || 'Bare Account';
               if (localMailbox?.name && localMailbox.name.includes('@')) {
-                console.log(`🔄 Clearing stale HashdTag name "${localMailbox.name}" from localStorage`);
+                console.log(`🔄 Clearing stale HashID name "${localMailbox.name}" from localStorage`);
                 displayName = 'Bare Account';
                 // Update localStorage to clear the stale name
                 SimpleKeyManager.renameMailbox(userAddress, publicKeyHash, 'Bare Account');
@@ -84,7 +84,7 @@ export const Account: React.FC<AccountProps> = ({
                 name: displayName, 
                 type: 'bare',
                 publicKey: account.publicKey,
-                hasHashdTagAttached: false
+                hasHashIDAttached: false
               });
               console.log(`📝 Added bare account: ${displayName}`);
             }
@@ -117,11 +117,11 @@ export const Account: React.FC<AccountProps> = ({
     }
     
     // Get all on-chain accounts using unified model
-    let hashdTags: string[] = [];
+    let hashIDs: string[] = [];
     let accountCount = 0;
     
     try {
-      hashdTags = await contractService.getOwnerHashdTags(userAddress);
+      hashIDs = await contractService.getOwnerHashIDs(userAddress);
       accountCount = await contractService.getAccountCount(userAddress);
     } catch (error) {
       console.warn('⚠️ Could not fetch blockchain accounts, skipping sync:', error);
@@ -131,8 +131,8 @@ export const Account: React.FC<AccountProps> = ({
     // Build set of valid public key hashes from blockchain
     const validHashes = new Set<string>();
     
-    // Add HashdTag accounts
-    for (const name of hashdTags) {
+    // Add HashID accounts
+    for (const name of hashIDs) {
       try {
         const publicKey = await contractService.getPublicKeyByName(name);
         const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(publicKey);
@@ -143,7 +143,7 @@ export const Account: React.FC<AccountProps> = ({
       }
     }
     
-    // Add all accounts (including those without HashdTags)
+    // Add all accounts (including those without HashIDs)
     for (let i = 0; i < accountCount; i++) {
       try {
         const account = await contractService.getAccount(userAddress, i);
@@ -265,7 +265,7 @@ export const Account: React.FC<AccountProps> = ({
               onRename={handleRename}
             />
 
-            <HashdTagNFTs userAddress={userAddress} onAccountsChanged={fetchAccounts} />
+            <HashIDNFTs userAddress={userAddress} onAccountsChanged={fetchAccounts} />
           </div>
 
           {/* Right Column - How It Works */}

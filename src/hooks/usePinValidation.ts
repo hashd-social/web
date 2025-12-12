@@ -46,7 +46,7 @@ export const usePinValidation = () => {
         for (let i = 0; i < accountCount; i++) {
           const account = await contractService.getAccount(address, i);
           if (account.isActive && account.publicKey.toLowerCase() === keyHex.toLowerCase()) {
-            const accountName = account.hashdTagName || `Account ${i + 1}`;
+            const accountName = account.hashIDName || `Account ${i + 1}`;
             setError(`This PIN is already used for "${accountName}". Please use a different PIN.`);
             setIsChecking(false);
             return;
@@ -56,10 +56,10 @@ export const usePinValidation = () => {
         console.log('Error checking accounts:', error);
       }
 
-      // Check HashdTag accounts
-      const allHashdTags = await contractService.getOwnerHashdTags(address);
+      // Check HashID accounts
+      const allHashIDs = await contractService.getOwnerHashIDs(address);
 
-      for (const existingAccount of allHashdTags) {
+      for (const existingAccount of allHashIDs) {
         try {
           const existingPubKey = await contractService.getPublicKeyByName(existingAccount);
 

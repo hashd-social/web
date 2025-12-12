@@ -180,10 +180,10 @@ export const SendMessage: React.FC<SendMessageProps> = ({
           // Try to get full account data for wallet address
           let walletAddress = 'Unknown';
           try {
-            // Check if it's a HashdTag account (contains @)
+            // Check if it's a HashID account (contains @)
             // Contract stores accounts as "name@domain" format
             if (input.includes('@')) {
-              const accountData = await contractService.getHashdTagAccount(input);
+              const accountData = await contractService.getHashIDAccount(input);
               walletAddress = accountData.owner;
               
               if (!accountData.isActive) {
@@ -256,7 +256,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
             // Filter for active accounts and build display names
             const activeAccounts = accounts
               .filter(acc => acc.isActive)
-              .map(acc => acc.hasHashdTagAttached ? acc.hashdTagName : `Bare Account (${acc.publicKey.slice(0, 10)}...)`);
+              .map(acc => acc.hasHashIDAttached ? acc.hashIDName : `Bare Account (${acc.publicKey.slice(0, 10)}...)`);
             
             setAvailableAccounts(activeAccounts);
             
@@ -266,8 +266,8 @@ export const SendMessage: React.FC<SendMessageProps> = ({
               if (firstAccount) {
                 setSelectedAccount(activeAccounts[0]);
                 
-                if (firstAccount.hasHashdTagAttached) {
-                  const [accName, domain] = firstAccount.hashdTagName.split('@');
+                if (firstAccount.hasHashIDAttached) {
+                  const [accName, domain] = firstAccount.hashIDName.split('@');
                   setRecipientInfo({
                     publicKey: firstAccount.publicKey,
                     walletAddress: input,
@@ -343,16 +343,16 @@ export const SendMessage: React.FC<SendMessageProps> = ({
     setLoadingAccountSelection(true);
     
     try {
-      // Check if this is a HashdTag account (contains @) or a bare account
+      // Check if this is a HashID account (contains @) or a bare account
       if (accountDisplayName.includes('@')) {
-        // HashdTag account
+        // HashID account
         const publicKey = await contractService.getPublicKeyByName(accountDisplayName);
         const [accName, domain] = accountDisplayName.split('@');
         
         // Get the wallet address from AccountRegistry
         let walletAddress = recipient; // Fallback to input value
         try {
-          const accountData = await contractService.getHashdTagAccount(accountDisplayName);
+          const accountData = await contractService.getHashIDAccount(accountDisplayName);
           walletAddress = accountData.owner;
         } catch (error) {
           console.warn('Could not get wallet address from AccountRegistry, using input value');
@@ -369,7 +369,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
         const accounts = await contractService.getAccounts(recipient);
         const publicKeyPrefix = accountDisplayName.match(/\(0x[a-fA-F0-9]+\.\.\.\)/)?.[0]?.slice(1, -4) || '';
         const matchingAccount = accounts.find(acc => 
-          acc.isActive && !acc.hasHashdTagAttached && acc.publicKey.startsWith(publicKeyPrefix)
+          acc.isActive && !acc.hasHashIDAttached && acc.publicKey.startsWith(publicKeyPrefix)
         );
         
         if (matchingAccount) {
@@ -971,7 +971,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
       <div className="mb-6">
         <label className="text-xs font-bold neon-text-cyan uppercase tracking-wider mb-3 block font-mono flex items-center gap-2">
           <div className="w-1 h-4 bg-cyan-500 rounded-full"></div>
-          {replyThreadId ? 'Thread Participants' : 'Recipient Wallet or HASHDtag *'}
+          {replyThreadId ? 'Thread Participants' : 'Recipient Wallet or HashID *'}
         </label>
         {replyThreadId ? (
           <div className="px-4 py-3 bg-gray-900/50 border border-cyan-500/30 rounded-lg">
@@ -1028,7 +1028,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
           >
             <p className="text-sm text-white font-mono">
               {recipient.includes('@') 
-                ? 'This account does not exist or the HASHDtag is not linked to an encryption key. Please try another address.'
+                ? 'This account does not exist or the HashID is not linked to an encryption key. Please try another address.'
                 : 'This wallet address has not registered their encryption key. They need to create a mailbox first.'
               }
             </p>

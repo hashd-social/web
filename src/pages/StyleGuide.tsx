@@ -756,10 +756,10 @@ export const StyleGuide: React.FC = () => {
             </Example>
 
             <Example
-              title="HashdTag Badge"
-              code={`<span class="badge-hashdtag">HASHDTAG</span>`}
+              title="HashID Badge"
+              code={`<span class="badge-hashid">HASHDTAG</span>`}
             >
-              <span className="badge-hashdtag">HASHDTAG</span>
+              <span className="badge-hashid">HASHDTAG</span>
             </Example>
 
             <Example

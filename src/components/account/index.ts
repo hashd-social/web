@@ -6,5 +6,5 @@
 
 export { CurrentMailbox } from './CurrentMailbox';
 export { LinkedMailboxes } from './LinkedMailboxes';
-export { HashdTagNFTs } from './HashdTagNFTs';
+export { HashIDNFTs } from './HashIDNFTs';
 export { HowMailboxesWork } from './HowMailboxesWork';

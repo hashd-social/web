@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Image as ImageIcon, Link2, Unlink, Send, AlertCircle } from 'lucide-react';
 import { contractService } from '../utils/contracts';
 import { ethers } from 'ethers';
-import { AttachHashdTagModal } from './modals/AttachHashdTagModal';
+import { AttachHashIDModal } from './modals/AttachHashIDModal';
 
-interface HashdTagNFTCardProps {
+
+interface HashIDNFTCardProps {
   tokenId: string;
   fullName: string;
   domain: string;
@@ -23,7 +24,7 @@ interface NFTMetadata {
   }>;
 }
 
-export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
+export const HashIDNFTCard: React.FC<HashIDNFTCardProps> = ({
   tokenId,
   fullName,
   domain,
@@ -70,7 +71,7 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
     const checkAttachment = async () => {
       try {
         setCheckingAttachment(true);
-        const attached = await contractService.isHashdTagAttached(fullName);
+        const attached = await contractService.isHashIDAttached(fullName);
         setIsAttached(attached);
       } catch (error) {
         console.error('Error checking attachment status:', error);
@@ -91,14 +92,14 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
       setProcessing(true);
       setError(null);
       
-      const tx = await contractService.detachHashdTag(fullName);
+      const tx = await contractService.detachHashID(fullName);
       await tx.wait();
       
       setIsAttached(false);
       if (onRefresh) onRefresh();
     } catch (error: any) {
-      console.error('Error detaching HashdTag:', error);
-      setError(error.message || 'Failed to detach HashdTag');
+      console.error('Error detaching HashID:', error);
+      setError(error.message || 'Failed to detach HashID');
     } finally {
       setProcessing(false);
     }
@@ -119,15 +120,15 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
       setProcessing(true);
       setError(null);
       
-      const tx = await contractService.transferHashdTag(userAddress, transferAddress, tokenId);
+      const tx = await contractService.transferHashID(userAddress, transferAddress, tokenId);
       await tx.wait();
       
       setShowTransferInput(false);
       setTransferAddress('');
       if (onRefresh) onRefresh();
     } catch (error: any) {
-      console.error('Error transferring HashdTag:', error);
-      setError(error.message || 'Failed to transfer HashdTag');
+      console.error('Error transferring HashID:', error);
+      setError(error.message || 'Failed to transfer HashID');
     } finally {
       setProcessing(false);
     }
@@ -297,7 +298,7 @@ export const HashdTagNFTCard: React.FC<HashdTagNFTCardProps> = ({
       </div>
 
       {/* Attach Account Selection Modal */}
-      <AttachHashdTagModal
+      <AttachHashIDModal
         isOpen={showAttachModal}
         onClose={() => setShowAttachModal(false)}
         fullName={fullName}

@@ -65,7 +65,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
           hasOnChainNamedAccounts = false;
         } else {
           console.log(`🔍 Checking blockchain for named accounts for address: ${userAddress}`);
-          const namedAccounts = await contractService.getOwnerHashdTags(userAddress);
+          const namedAccounts = await contractService.getOwnerHashIDs(userAddress);
           hasOnChainNamedAccounts = namedAccounts.length > 0;
           console.log(`🔗 Blockchain check - Named accounts: ${namedAccounts.length}`, namedAccounts);
         }
@@ -244,7 +244,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
           } else {
             console.log(`🔍 Checking blockchain for named accounts for address: ${userAddress}`);
             // Get all named accounts for this wallet address from blockchain
-            const namedAccounts = await contractService.getOwnerHashdTags(userAddress);
+            const namedAccounts = await contractService.getOwnerHashIDs(userAddress);
             hasOnChainNamedAccounts = namedAccounts.length > 0;
             console.log(`🔗 Blockchain check - Named accounts: ${namedAccounts.length}`, namedAccounts);
           }
@@ -302,7 +302,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
         let hasOnChainNamedAccounts = false;
         if (userAddress) {
           try {
-            const namedAccounts = await contractService.getOwnerHashdTags(userAddress);
+            const namedAccounts = await contractService.getOwnerHashIDs(userAddress);
             hasOnChainNamedAccounts = namedAccounts.length > 0;
           } catch (error) {
             console.log('Could not check blockchain named accounts:', error);
@@ -405,7 +405,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
       return 'Enter your PIN to access a different mailbox';
     if (isCreatingNew)
       return mailboxes.length === 0
-        ? 'Create unlimited mailboxes! Choose a HASHDtag (human-readable name, 5+ chars FREE for first account) or go anonymous with a bare account.'
+        ? 'Create unlimited mailboxes! Choose a HashID (human-readable name, 5+ chars FREE for first account) or go anonymous with a bare account.'
         : 'Create additional mailbox. Named accounts have fees, bare accounts are always free.';
     return 'Enter your PIN to access your existing mailbox';
   };

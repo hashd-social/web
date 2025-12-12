@@ -12,7 +12,7 @@ interface BlockchainAccount {
   name: string;
   type: 'named' | 'bare';
   publicKey?: string;
-  hasHashdTagAttached?: boolean;
+  hasHashIDAttached?: boolean;
 }
 
 interface CurrentMailboxProps {
@@ -41,7 +41,7 @@ export const CurrentMailbox: React.FC<CurrentMailboxProps> = ({
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState('');
 
-  // Find the current account in blockchain accounts to get HashdTag info
+  // Find the current account in blockchain accounts to get HashID info
   // Try full public key first, then fall back to publicKeyHash comparison
   const currentBlockchainAccount = blockchainAccounts.find(acc => {
     if (!acc.publicKey) return false;
@@ -61,12 +61,12 @@ export const CurrentMailbox: React.FC<CurrentMailboxProps> = ({
     return false;
   }) || null;
   
-  // Use HashdTag name if attached, otherwise use local mailbox name
-  const displayName = currentBlockchainAccount?.hasHashdTagAttached 
+  // Use HashID name if attached, otherwise use local mailbox name
+  const displayName = currentBlockchainAccount?.hasHashIDAttached 
     ? currentBlockchainAccount.name 
     : currentMailbox?.name || 'Unknown';
   
-  const hasHashdTag = currentBlockchainAccount?.hasHashdTagAttached || false;
+  const hasHashID = currentBlockchainAccount?.hasHashIDAttached || false;
 
   const handleStartRename = () => {
     if (currentMailbox) {
@@ -141,12 +141,12 @@ export const CurrentMailbox: React.FC<CurrentMailboxProps> = ({
                   <span className="text-sm font-bold text-white font-mono">
                     {displayName}
                   </span>
-                  {hasHashdTag && (
+                  {hasHashID && (
                     <span className="px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/30 rounded text-xs font-mono neon-text-cyan">
                       HASHDTAG
                     </span>
                   )}
-                  {!hasHashdTag && (
+                  {!hasHashID && (
                     <button
                       onClick={handleStartRename}
                       className="p-1.5 text-gray-400 hover:text-cyan-400 transition-colors"

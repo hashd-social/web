@@ -12,7 +12,7 @@ interface BlockchainAccount {
   name: string;
   type: 'named' | 'bare';
   publicKey?: string;
-  hasHashdTagAttached?: boolean;
+  hasHashIDAttached?: boolean;
 }
 
 interface LinkedMailboxesProps {
@@ -158,7 +158,7 @@ export const LinkedMailboxes: React.FC<LinkedMailboxesProps> = ({
                         HASHDTAG
                       </span>
                     )}
-                    {account.type === 'bare' && !account.hasHashdTagAttached && (
+                    {account.type === 'bare' && !account.hasHashIDAttached && (
                       <button
                         onClick={() => {
                           if (account.publicKey) {

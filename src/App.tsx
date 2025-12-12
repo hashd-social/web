@@ -405,21 +405,21 @@ function App() {
         console.log('🔍 Checking for incomplete registrations...');
         
         // Get all named accounts for this wallet
-        const hashdTagAccounts = await contractService.getOwnerHashdTags(state.userAddress);
-        console.log('Named accounts for wallet:', hashdTagAccounts);
+        const hashIDAccounts = await contractService.getOwnerHashIDs(state.userAddress);
+        console.log('Named accounts for wallet:', hashIDAccounts);
         
         // If no named accounts on-chain, nothing to warn about
-        if (hashdTagAccounts.length === 0) {
+        if (hashIDAccounts.length === 0) {
           console.log('✅ No named accounts found on-chain');
           setState(prev => prev.warning ? { ...prev, warning: '' } : prev);
           return;
         }
         
         // User has on-chain accounts but no local mailboxes - new device or incomplete
-        console.log('⚠️ On-chain accounts exist but no local mailboxes:', hashdTagAccounts);
+        console.log('⚠️ On-chain accounts exist but no local mailboxes:', hashIDAccounts);
         setState(prev => ({
           ...prev,
-          warning: `Found on-chain account(s): ${hashdTagAccounts.join(', ')}. To access, click "Switch / Create Mailbox" and enter your PIN to restore your mailbox.`
+          warning: `Found on-chain account(s): ${hashIDAccounts.join(', ')}. To access, click "Switch / Create Mailbox" and enter your PIN to restore your mailbox.`
         }));
       } catch (error) {
         console.log('Error checking incomplete registrations:', error);
@@ -457,10 +457,10 @@ function App() {
     }
     
     // Get all named accounts for this wallet once
-    let hashdTagAccounts: string[] = [];
+    let hashIDAccounts: string[] = [];
     try {
-      hashdTagAccounts = await contractService.getOwnerHashdTags(walletAddr);
-      console.log(`📋 Found ${hashdTagAccounts.length} named accounts for wallet:`, hashdTagAccounts);
+      hashIDAccounts = await contractService.getOwnerHashIDs(walletAddr);
+      console.log(`📋 Found ${hashIDAccounts.length} named accounts for wallet:`, hashIDAccounts);
     } catch (error) {
       console.warn('Could not fetch named accounts for wallet:', error);
       return loadedMailboxes;
@@ -469,7 +469,7 @@ function App() {
     // Build a map of publicKeyHash -> {accountName, timestamp, publicKey}
     const publicKeyHashToInfo = new Map<string, { name: string; timestamp: number; publicKey: string }>();
     
-    for (const accountName of hashdTagAccounts) {
+    for (const accountName of hashIDAccounts) {
       try {
         const accountInfo = await contractService.getNamedAccountInfo(accountName);
         // Get the public key bytes and compute the hash (first 16 bytes)
@@ -793,32 +793,32 @@ function App() {
     try {
       console.log('🔍 Checking for incomplete registration...');
       
-      // Check if HashdTag account exists
+      // Check if HashID account exists
       const fullName = `${accountName}@${domain}`;
-      const hashdTagAccount = await contractService.getHashdTagAccount(fullName);
+      const hashIDAccount = await contractService.getHashIDAccount(fullName);
       
-      console.log('Named account:', hashdTagAccount);
+      console.log('Named account:', hashIDAccount);
       
       // If account doesn't exist or isn't active, not incomplete
-      if (!hashdTagAccount.isActive) {
+      if (!hashIDAccount.isActive) {
         console.log('✅ Account not registered');
         return { needsRecovery: false };
       }
       
       // FRONT-RUNNING PROTECTION: Verify the current wallet owns this account
-      if (hashdTagAccount.owner.toLowerCase() !== address.toLowerCase()) {
+      if (hashIDAccount.owner.toLowerCase() !== address.toLowerCase()) {
         console.log('❌ Front-running detected: Account owned by different address');
         console.log('Expected owner:', address.toLowerCase());
-        console.log('Actual owner:', hashdTagAccount.owner.toLowerCase());
-        throw new Error(`This account is owned by a different wallet. You cannot recover this registration. Account owner: ${hashdTagAccount.owner}`);
+        console.log('Actual owner:', hashIDAccount.owner.toLowerCase());
+        throw new Error(`This account is owned by a different wallet. You cannot recover this registration. Account owner: ${hashIDAccount.owner}`);
       }
       
       // Account exists and is owned by current wallet
       // Now check if the public key from the named account is registered in KeyRegistry
       try {
-        const keyExists = await contractService.hasKey(address, hashdTagAccount.publicKey);
+        const keyExists = await contractService.hasKey(address, hashIDAccount.publicKey);
         console.log('Key exists in KeyRegistry:', keyExists);
-        console.log('Named account public key:', hashdTagAccount.publicKey);
+        console.log('Named account public key:', hashIDAccount.publicKey);
         
         // Check if the key is registered
         if (keyExists) {
@@ -826,11 +826,11 @@ function App() {
           return { needsRecovery: false };
         } else {
           console.log('⚠️ Key NOT registered in KeyRegistry - incomplete registration detected!');
-          console.log('Named account has:', hashdTagAccount.publicKey);
+          console.log('Named account has:', hashIDAccount.publicKey);
           return {
             needsRecovery: true,
             fullName,
-            publicKey: hashdTagAccount.publicKey,
+            publicKey: hashIDAccount.publicKey,
             accountName,
             domain
           };
@@ -841,7 +841,7 @@ function App() {
         return {
           needsRecovery: true,
           fullName,
-          publicKey: hashdTagAccount.publicKey,
+          publicKey: hashIDAccount.publicKey,
           accountName,
           domain
         };
@@ -982,7 +982,7 @@ function App() {
           for (let i = 0; i < accountCount; i++) {
             const account = await contractService.getAccount(address, i);
             if (account.publicKey.toLowerCase() === keyHex.toLowerCase()) {
-              console.log(`✅ Matches account ${i}${account.hashdTagName ? ` (${account.hashdTagName})` : ''}`);
+              console.log(`✅ Matches account ${i}${account.hashIDName ? ` (${account.hashIDName})` : ''}`);
             }
           }
         } catch (error) {
@@ -991,7 +991,7 @@ function App() {
         
         // Check named accounts
         try {
-          const allNamedAccounts = await contractService.getOwnerHashdTags(address);
+          const allNamedAccounts = await contractService.getOwnerHashIDs(address);
           for (const existingAccount of allNamedAccounts) {
             try {
               const existingPubKey = await contractService.getPublicKeyByName(existingAccount);
@@ -1102,25 +1102,25 @@ function App() {
         // Calculate registration fee based on name length
         const fee = await contractService.calculateNameFee(accountName, domain);
         
-        // Check if this wallet already has any HashdTags on-chain (for free eligibility)
-        const existingHashdTags = await contractService.getOwnerHashdTags(address);
-        const isFirstHashdTag = existingHashdTags.length === 0;
-        const isFreeEligible = isFirstHashdTag && accountName.length >= 5;
+        // Check if this wallet already has any HashIDs on-chain (for free eligibility)
+        const existingHashIDs = await contractService.getOwnerHashIDs(address);
+        const isFirstHashID = existingHashIDs.length === 0;
+        const isFreeEligible = isFirstHashID && accountName.length >= 5;
         
         console.log(`💰 Registration fee for "${accountName}" (${accountName.length} chars): ${ethers.formatEther(fee)} ETH`);
-        console.log(`📊 Existing HashdTags on-chain: ${existingHashdTags.length}`);
-        console.log(`🎉 First HashdTag: ${isFirstHashdTag ? 'YES' : 'NO'}`);
+        console.log(`📊 Existing HashIDs on-chain: ${existingHashIDs.length}`);
+        console.log(`🎉 First HashID: ${isFirstHashID ? 'YES' : 'NO'}`);
         console.log(`🆓 Free eligible (5+ chars): ${isFreeEligible ? 'YES (FREE!)' : 'NO (payment required)'}`);
         
         if (!isFreeEligible && fee > 0) {
           console.log(`💳 Payment required: ${ethers.formatEther(fee)} ETH`);
         }
         
-        console.log('📧 Registering account with HashdTag...');
+        console.log('📧 Registering account with HashID...');
         try {
-          const namedTx = await contractService.registerAccountWithHashdTag(accountName, domain, keyHex, isFreeEligible ? BigInt(0) : fee);
+          const namedTx = await contractService.registerAccountWithHashID(accountName, domain, keyHex, isFreeEligible ? BigInt(0) : fee);
           await namedTx.wait();
-          console.log(`✅ Account with HashdTag ${accountName}@${domain} registered on blockchain`);
+          console.log(`✅ Account with HashID ${accountName}@${domain} registered on blockchain`);
         } catch (regError: any) {
           console.error('❌ Account registration failed:', regError);
           
@@ -1143,7 +1143,7 @@ function App() {
           throw new Error(errorMsg);
         }
       } else {
-        // No name provided, register account without HashdTag
+        // No name provided, register account without HashID
         // Note: You can have multiple accounts per wallet, so always register
         console.log('📧 Registering account (FREE)...');
         const accountTx = await contractService.registerAccount(keyHex);
@@ -1281,34 +1281,34 @@ function App() {
           const account = await contractService.getAccount(address, i);
           if (account.publicKey.toLowerCase() === publicKeyHex.toLowerCase()) {
             accountExists = true;
-            accountName = account.hashdTagName || `Account ${i + 1}`;
+            accountName = account.hashIDName || `Account ${i + 1}`;
             console.log(`✅ Found matching account: ${accountName}`);
             break;
           }
         }
         
-        // Also check HashdTag accounts by name lookup
+        // Also check HashID accounts by name lookup
         if (!accountExists) {
-          const hashdTagAccounts = await contractService.getOwnerHashdTags(address);
-          console.log('📋 Found HashdTag accounts:', hashdTagAccounts);
+          const hashIDAccounts = await contractService.getOwnerHashIDs(address);
+          console.log('📋 Found HashID accounts:', hashIDAccounts);
           
-          // Match public key to find the correct HashdTag account
-          for (const hashdTagAccount of hashdTagAccounts) {
+          // Match public key to find the correct HashID account
+          for (const hashIDAccount of hashIDAccounts) {
             try {
-              const accountPubKey = await contractService.getPublicKeyByName(hashdTagAccount);
-              console.log(`🔍 Checking ${hashdTagAccount}:`);
+              const accountPubKey = await contractService.getPublicKeyByName(hashIDAccount);
+              console.log(`🔍 Checking ${hashIDAccount}:`);
               console.log(`   Generated key: ${publicKeyHex.toLowerCase()}`);
               console.log(`   Account key:   ${accountPubKey.toLowerCase()}`);
               console.log(`   Match: ${accountPubKey.toLowerCase() === publicKeyHex.toLowerCase()}`);
               
               if (accountPubKey.toLowerCase() === publicKeyHex.toLowerCase()) {
                 accountExists = true;
-                accountName = hashdTagAccount;
+                accountName = hashIDAccount;
                 console.log('✅ Found matching named account:', accountName);
                 break;
               }
             } catch (error) {
-              console.warn('Could not check named account:', hashdTagAccount, error);
+              console.warn('Could not check named account:', hashIDAccount, error);
             }
           }
         }

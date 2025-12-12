@@ -66,9 +66,9 @@ export const HowMailboxesWork: React.FC = () => {
               <Wallet className="w-5 h-5 neon-text-cyan" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-white mb-1 font-mono">HashdTag Identity</h4>
+              <h4 className="text-sm font-bold text-white mb-1 font-mono">HashID Identity</h4>
               <p className="text-sm text-gray-400 leading-relaxed">
-                Your HashdTag (like @username) is your human-readable identity on-chain. It's linked to your public key and provides a consistent identity across all Hashd services.
+                Your HashID (like @username) is your human-readable identity on-chain. It's linked to your public key and provides a consistent identity across all Hashd services.
               </p>
             </div>
           </div>

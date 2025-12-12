@@ -110,7 +110,7 @@ web/
 - **Encrypted Messaging**: End-to-end encrypted DMs
 - **Guilds**: Token-gated communities with posts and comments
 - **NFT Marketplaces**: Create and trade guild NFTs
-- **HashdTags**: Mint unique on-chain identifiers
+- **HashIDs**: Mint unique on-chain identifiers
 - **Zero Backend**: Pure client + blockchain + IPFS
 
 ## Design System

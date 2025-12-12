@@ -33,29 +33,29 @@ export const useMailboxSwitch = () => {
           const account = await contractService.getAccount(address, i);
           if (account.publicKey.toLowerCase() === publicKeyHex.toLowerCase()) {
             accountExists = true;
-            accountName = account.hashdTagName || `Account ${i + 1}`;
+            accountName = account.hashIDName || `Account ${i + 1}`;
             console.log(`✅ Found matching account: ${accountName}`);
             break;
           }
         }
 
-        // Also check HashdTag accounts by name lookup
+        // Also check HashID accounts by name lookup
         if (!accountExists) {
-          const hashdTags = await contractService.getOwnerHashdTags(address);
-          console.log('📋 Found HashdTag accounts:', hashdTags);
+          const hashIDs = await contractService.getOwnerHashIDs(address);
+          console.log('📋 Found HashID accounts:', hashIDs);
 
-          // Match public key to find the correct HashdTag account
-          for (const hashdTag of hashdTags) {
+          // Match public key to find the correct HashID account
+          for (const hashID of hashIDs) {
             try {
-              const accountPubKey = await contractService.getPublicKeyByName(hashdTag);
+              const accountPubKey = await contractService.getPublicKeyByName(hashID);
               if (accountPubKey.toLowerCase() === publicKeyHex.toLowerCase()) {
                 accountExists = true;
-                accountName = hashdTag;
-                console.log('✅ Found matching HashdTag account:', accountName);
+                accountName = hashID;
+                console.log('✅ Found matching HashID account:', accountName);
                 break;
               }
             } catch (error) {
-              console.warn('Could not check HashdTag account:', hashdTag, error);
+              console.warn('Could not check HashID account:', hashID, error);
             }
           }
         }
