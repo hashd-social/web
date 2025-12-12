@@ -181,9 +181,10 @@ export class SecureMailboxManager {
   
   /**
    * Enable session persistence (remember until browser close)
+   * Also persists any existing in-memory sessions
    */
-  static enableSessionPersistence(): void {
-    SessionKeyManager.enableSessionPersistence();
+  static async enableSessionPersistence(): Promise<void> {
+    await SessionKeyManager.enableSessionPersistence();
     console.log('✅ [SecureMailbox] Session persistence enabled');
   }
   

@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { User, Shield, Key, Wallet, Inbox, Info, Hash, Edit2, Check, X } from 'lucide-react';
+import { User } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
-import { MailboxInfo, SimpleKeyManager } from '../utils/crypto-simple';
+import { MailboxInfo, SimpleKeyManager, SimpleCryptoUtils } from '../utils/crypto-simple';
 import { contractService } from '../utils/contracts';
+import {
+  CurrentMailbox,
+  LinkedMailboxes,
+  HashIDNFTs,
+  HowMailboxesWork
+} from '../components/account';
 
 interface AccountProps {
   currentMailbox: MailboxInfo | null;
@@ -31,66 +37,200 @@ export const Account: React.FC<AccountProps> = ({
   onSwitchMailbox,
   onRefreshMailboxes,
 }) => {
-  const [editingHash, setEditingHash] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [blockchainAccounts, setBlockchainAccounts] = useState<{name: string, type: 'named' | 'bare', publicKey?: string}[]>([]);
+  const [blockchainAccounts, setBlockchainAccounts] = useState<{name: string, type: 'named' | 'bare', publicKey?: string, hasHashIDAttached?: boolean}[]>([]);
 
-  // Fetch named and bare accounts from blockchain on mount
-  useEffect(() => {
-    const fetchAccounts = async () => {
+  // Fetch named and bare accounts from blockchain
+  const fetchAccounts = async () => {
       if (!userAddress) return;
+      
+      const accounts: {name: string, type: 'named' | 'bare', publicKey?: string, hasHashIDAttached?: boolean}[] = [];
+      
       try {
-        const accounts: {name: string, type: 'named' | 'bare', publicKey?: string}[] = [];
+        // First, fetch all accounts from AccountRegistry (source of truth for active accounts)
+        const accountCount = await contractService.getAccountCount(userAddress);
+        console.log('📊 Total account count from contract:', accountCount);
         
-        // Fetch named accounts
-        const named = await contractService.getOwnerNamedAccounts(userAddress);
-        console.log('📋 Named accounts for wallet:', named);
-        named.forEach(name => accounts.push({ name, type: 'named' }));
-        
-        // Fetch all bare accounts
-        try {
-          const bareAccounts = await contractService.getBareAccounts(userAddress);
-          console.log('📋 Bare accounts for wallet:', bareAccounts);
+        for (let i = 0; i < accountCount; i++) {
+          const account = await contractService.getAccount(userAddress, i);
+          console.log(`  [${i}] ${account.isActive ? '✅ ACTIVE' : '❌ INACTIVE'} hasHashID: ${account.hasHashIDAttached} - publicKey:`, account.publicKey);
           
-          bareAccounts.publicKeys.forEach((publicKey, index) => {
-            if (bareAccounts.isActives[index]) {
+          if (account.isActive) {
+            if (account.hasHashIDAttached && account.hashIDName) {
+              // Named account with attached HashID
               accounts.push({ 
-                name: `Bare Account ${index + 1}`, 
-                type: 'bare',
-                publicKey: publicKey.slice(0, 20) + '...'
+                name: account.hashIDName, 
+                type: 'named',
+                publicKey: account.publicKey,
+                hasHashIDAttached: true
               });
+              console.log(`✅ Added named account: ${account.hashIDName}`);
+            } else {
+              // Bare account (no HashID attached)
+              const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
+              const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+              const localMailbox = mailboxes.find(m => m.publicKeyHash === publicKeyHash);
+              
+              // If localStorage has a HashID-style name (contains @) but blockchain says it's bare,
+              // the HashID was detached - update localStorage to show "Bare Account"
+              let displayName = localMailbox?.name || 'Bare Account';
+              if (localMailbox?.name && localMailbox.name.includes('@')) {
+                console.log(`🔄 Clearing stale HashID name "${localMailbox.name}" from localStorage`);
+                displayName = 'Bare Account';
+                // Update localStorage to clear the stale name
+                SimpleKeyManager.renameMailbox(userAddress, publicKeyHash, 'Bare Account');
+              }
+              
+              accounts.push({ 
+                name: displayName, 
+                type: 'bare',
+                publicKey: account.publicKey,
+                hasHashIDAttached: false
+              });
+              console.log(`📝 Added bare account: ${displayName}`);
             }
-          });
-        } catch (error) {
-          console.warn('Could not fetch bare accounts:', error);
+          }
         }
         
-        setBlockchainAccounts(accounts);
       } catch (error) {
         console.error('Error fetching blockchain accounts:', error);
       }
+      
+      // Always set accounts, even if some fetches failed
+      console.log('📦 Total accounts to display:', accounts.length, accounts);
+      setBlockchainAccounts(accounts);
     };
-    fetchAccounts();
-  }, [userAddress]);
 
-  const handleRename = (mailbox: MailboxInfo) => {
-    if (!editName.trim()) return;
+  // Sync mailbox metadata (names, timestamps) with blockchain accounts
+  // Note: This is UI metadata only, NOT encryption keys. Keys follow the persistence model.
+  // IMPORTANT: This function only REMOVES orphaned mailboxes, never deletes all of them
+  const syncMailboxes = async () => {
+    if (!userAddress) return;
+    
+    console.log('🔄 Syncing localStorage mailboxes with blockchain...');
+    const localMailboxes = SimpleKeyManager.getMailboxList(userAddress);
+    console.log('📦 Local mailboxes:', localMailboxes.length);
+    
+    // Safety check: Don't sync if no local mailboxes (nothing to sync)
+    if (localMailboxes.length === 0) {
+      console.log('⏭️ No local mailboxes to sync');
+      return;
+    }
+    
+    // Get all on-chain accounts using unified model
+    let hashIDs: string[] = [];
+    let accountCount = 0;
+    
+    try {
+      hashIDs = await contractService.getOwnerHashIDs(userAddress);
+      accountCount = await contractService.getAccountCount(userAddress);
+    } catch (error) {
+      console.warn('⚠️ Could not fetch blockchain accounts, skipping sync:', error);
+      return; // Don't sync if we can't read blockchain
+    }
+    
+    // Build set of valid public key hashes from blockchain
+    const validHashes = new Set<string>();
+    
+    // Add HashID accounts
+    for (const name of hashIDs) {
+      try {
+        const publicKey = await contractService.getPublicKeyByName(name);
+        const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(publicKey);
+        const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+        validHashes.add(publicKeyHash);
+      } catch (error) {
+        console.warn(`Could not get public key for ${name}`);
+      }
+    }
+    
+    // Add all accounts (including those without HashIDs)
+    for (let i = 0; i < accountCount; i++) {
+      try {
+        const account = await contractService.getAccount(userAddress, i);
+        if (account.isActive) {
+          const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
+          const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+          validHashes.add(publicKeyHash);
+        }
+      } catch (error) {
+        console.warn(`Could not get account at index ${i}:`, error);
+      }
+    }
+    
+    console.log('✅ Valid hashes from blockchain:', validHashes.size);
+    
+    // Safety check: Don't delete mailboxes if blockchain returned no accounts
+    // This prevents accidental deletion due to RPC issues or timing problems
+    if (validHashes.size === 0) {
+      console.warn('⚠️ Blockchain returned 0 valid accounts - skipping sync to prevent data loss');
+      return;
+    }
+    
+    // Filter local mailboxes to only keep those that exist on-chain
+    const syncedMailboxes = localMailboxes.filter(m => validHashes.has(m.publicKeyHash));
+    
+    // Safety check: Never delete ALL mailboxes - something is wrong if that happens
+    if (syncedMailboxes.length === 0 && localMailboxes.length > 0) {
+      console.warn('⚠️ Sync would delete all mailboxes - aborting to prevent data loss');
+      return;
+    }
+    
+    if (syncedMailboxes.length !== localMailboxes.length) {
+      console.log(`🧹 Removing ${localMailboxes.length - syncedMailboxes.length} orphaned mailboxes from localStorage`);
+      SimpleKeyManager.saveMailboxList(syncedMailboxes, userAddress, true);
+      onRefreshMailboxes();
+    } else {
+      console.log('✅ All local mailboxes are synced with blockchain');
+    }
+  };
+
+  // Fetch accounts on mount and when userAddress or keyPair changes (keyPair indicates full connection)
+  useEffect(() => {
+    if (userAddress && keyPair) {
+      // Retry mechanism to wait for contracts to initialize
+      let retryCount = 0;
+      const maxRetries = 5;
+      
+      const attemptFetch = async () => {
+        try {
+          const accountCount = await contractService.getAccountCount(userAddress);
+          console.log(`✅ Contracts ready, account count: ${accountCount}`);
+          await fetchAccounts();
+          await syncMailboxes(); // Sync after fetching
+        } catch (error: any) {
+          if (error.message.includes('not initialized') && retryCount < maxRetries) {
+            retryCount++;
+            console.log(`⏳ Contracts not ready yet, retry ${retryCount}/${maxRetries} in 1s...`);
+            setTimeout(attemptFetch, 1000);
+          } else {
+            console.error('Failed to fetch accounts after retries:', error);
+            // Fetch anyway to at least show named accounts
+            fetchAccounts();
+          }
+        }
+      };
+      
+      // Initial delay then start attempting
+      const timer = setTimeout(attemptFetch, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [userAddress, keyPair]);
+
+  const handleRename = (publicKeyHash: string, newName: string) => {
+    if (!newName.trim()) return;
+    
+    console.log('🏷️ Renaming mailbox with hash:', publicKeyHash, 'to:', newName.trim());
     
     // Update mailbox name in localStorage
-    const allMailboxes = SimpleKeyManager.getMailboxList(userAddress);
-    const updated = allMailboxes.map(m => 
-      m.publicKeyHash === mailbox.publicKeyHash 
-        ? { ...m, name: editName.trim() }
-        : m
-    );
-    localStorage.setItem(
-      userAddress ? `hashd_mailboxes_${userAddress.toLowerCase()}` : 'hashd_mailboxes',
-      JSON.stringify(updated)
-    );
+    if (!userAddress) return;
     
-    setEditingHash(null);
-    setEditName('');
+    SimpleKeyManager.renameMailbox(userAddress, publicKeyHash, newName.trim());
+    console.log('✅ Mailbox renamed');
+    
     onRefreshMailboxes();
+    
+    // Refetch accounts to show updated name
+    fetchAccounts();
   };
 
   return (
@@ -105,233 +245,31 @@ export const Account: React.FC<AccountProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Mailbox Management */}
           <div className="space-y-6">
-            {/* Current Mailbox Status */}
-            <div className="bg-gray-800/50 rounded-lg p-6">
-              <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-                Current Mailbox
-              </h3>
-              <p className="text-sm text-gray-400 mb-4">
-                Your active mailbox for sending and receiving encrypted messages.
-              </p>
-              {currentMailbox ? (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-400 font-mono">ACTIVE MAILBOX:</span>
-                    <span className="text-sm font-bold text-white font-mono">
-                      {currentMailbox.name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-400 font-mono">CREATED:</span>
-                    <span className="text-sm font-bold text-white font-mono">
-                      {new Date(currentMailbox.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-400 font-mono">STATUS:</span>
-                    <span className={`text-sm font-bold font-mono ${isKeyRegistered ? 'neon-text-green' : 'text-red-400'}`}>
-                      {isKeyRegistered ? '✓ READY' : '⚠️ SETUP REQUIRED'}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 font-mono">NO.ACTIVE.MAILBOX</p>
-              )}
-            </div>
+            <CurrentMailbox
+              currentMailbox={currentMailbox}
+              isKeyRegistered={isKeyRegistered}
+              loading={loading}
+              keyPair={keyPair}
+              blockchainAccounts={blockchainAccounts}
+              onSetupMailbox={onSetupMailbox}
+              onCompleteSetup={onCompleteSetup}
+              onSwitchOrCreate={onSwitchOrCreate}
+              onRename={handleRename}
+            />
 
-            {/* Mailbox Actions */}
-            <div className="bg-gray-800/50 rounded-lg p-6">
-              <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-                Mailbox Actions
-              </h3>
-              <p className="text-sm text-gray-400 mb-4">
-                Create, switch, or manage your mailboxes.
-              </p>
-              <div className="space-y-4">
-                {!keyPair && (
-                  <button
-                    onClick={onSetupMailbox}
-                    disabled={loading}
-                    className="w-full px-6 py-3 bg-cyan-500/10 hover:border-cyan-500/50 neon-text-cyan rounded-lg disabled:opacity-50 transition-all font-bold font-mono flex items-center justify-center gap-2"
-                  >
-                    <Inbox className="w-5 h-5" />
-                    {loading ? 'SETTING UP...' : 'SETUP FIRST MAILBOX'}
-                  </button>
-                )}
-                
-                {keyPair && !isKeyRegistered && (
-                  <button
-                    onClick={onCompleteSetup}
-                    disabled={loading}
-                    className="w-full px-6 py-3 bg-cyan-500/10 hover:border-cyan-500/50 neon-text-cyan rounded-lg disabled:opacity-50 transition-all font-bold font-mono flex items-center justify-center gap-2"
-                  >
-                    <Shield className="w-5 h-5" />
-                    {loading ? 'COMPLETING SETUP...' : 'COMPLETE MAILBOX SETUP'}
-                  </button>
-                )}
+            <LinkedMailboxes
+              blockchainAccounts={blockchainAccounts}
+              currentMailbox={currentMailbox}
+              mailboxes={mailboxes}
+              onSwitchOrCreate={onSwitchOrCreate}
+              onRename={handleRename}
+            />
 
-                {keyPair && (
-                  <button
-                    onClick={onSwitchOrCreate}
-                    disabled={loading}
-                    className="w-full px-6 py-3 bg-cyan-500/10 hover:border-cyan-500/50 neon-text-cyan rounded-lg disabled:opacity-50 transition-all font-bold font-mono flex items-center justify-center gap-2"
-                  >
-                    <Inbox className="w-5 h-5" />
-                    SWITCH / CREATE MAILBOX
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Stored Mailboxes - from blockchain */}
-            {blockchainAccounts.length > 0 && (
-              <div className="bg-gray-800/50 rounded-lg p-6">
-                <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-                  Registered Accounts ({blockchainAccounts.length})
-                </h3>
-                <p className="text-sm text-gray-400 mb-4">
-                  All accounts registered on the blockchain for this wallet.
-                </p>
-                <div className="space-y-3">
-                  {blockchainAccounts.map((account) => {
-                    const isCurrent = currentMailbox?.name === account.name;
-                    return (
-                      <div
-                        key={account.name}
-                        className={`flex items-center justify-between p-4 rounded-lg border ${
-                          isCurrent
-                            ? 'bg-cyan-900/20 border-cyan-500/50'
-                            : 'bg-gray-900/50 border-gray-700/30'
-                        }`}
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-bold text-white font-mono">
-                              {account.name}
-                            </h4>
-                            {account.type === 'bare' && (
-                              <span className="text-xs bg-gray-600 text-gray-200 px-2 py-0.5 rounded font-mono">
-                                BARE
-                              </span>
-                            )}
-                            {isCurrent && (
-                              <span className="text-xs bg-cyan-500 text-white px-2 py-0.5 rounded font-mono font-bold">
-                                ACTIVE
-                              </span>
-                            )}
-                          </div>
-                          {account.publicKey && (
-                            <div className="text-xs text-gray-500 mt-1 font-mono flex items-center gap-1">
-                              <Hash className="w-3 h-3" />
-                              <span>{account.publicKey}</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {!isCurrent && (
-                            <button
-                              onClick={onSwitchOrCreate}
-                              className="text-xs neon-text-cyan hover:text-cyan-300 font-bold px-3 py-1.5 rounded bg-cyan-500/10 hover:border-cyan-500/50 transition-all font-mono"
-                            >
-                              SWITCH
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <HashIDNFTs userAddress={userAddress} onAccountsChanged={fetchAccounts} />
           </div>
 
           {/* Right Column - How It Works */}
-          <div className="bg-gray-800/50 rounded-lg p-6">
-            <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-              How Mailboxes Work
-            </h3>
-            <p className="text-sm text-gray-400 mb-6">
-              Understanding the security and portability of your mailboxes.
-            </p>
-            
-            <div className="space-y-6">
-              <div>
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="p-2 bg-cyan-500/10 rounded-lg mt-1">
-                    <Shield className="w-5 h-5 neon-text-cyan" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white mb-1 font-mono">Zero-Knowledge Security</h4>
-                    <p className="text-sm text-gray-400 leading-relaxed">
-                      Your PIN and encryption keys are <strong className="text-cyan-400">never stored</strong> anywhere—not in localStorage, sessionStorage, or any database. Keys exist only in memory during your session.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="p-2 bg-cyan-500/10 rounded-lg mt-1">
-                    <Key className="w-5 h-5 neon-text-cyan" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white mb-1 font-mono">Deterministic Key Derivation</h4>
-                    <p className="text-sm text-gray-400 leading-relaxed">
-                      Your mailbox key is derived from your wallet signature + PIN using secure KDF. The same wallet + PIN always generates the same keys, making your mailbox portable and recoverable.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="p-2 bg-cyan-500/10 rounded-lg mt-1">
-                    <Hash className="w-5 h-5 neon-text-cyan" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white mb-1 font-mono">Session-Based Access</h4>
-                    <p className="text-sm text-gray-400 leading-relaxed">
-                      After unlocking with your PIN, a temporary session key is created in memory. Your mailbox key is immediately wiped. Sessions end on refresh/close unless you enable persistence in Settings.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="p-2 bg-cyan-500/10 rounded-lg mt-1">
-                    <Wallet className="w-5 h-5 neon-text-cyan" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white mb-1 font-mono">HashdTag Identity</h4>
-                    <p className="text-sm text-gray-400 leading-relaxed">
-                      Your HashdTag (like @username) is your human-readable identity on-chain. It's linked to your public key and provides a consistent identity across all Hashd services.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="p-2 bg-cyan-500/10 rounded-lg mt-1">
-                    <Inbox className="w-5 h-5 neon-text-cyan" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white mb-1 font-mono">Blockchain Storage</h4>
-                    <p className="text-sm text-gray-400 leading-relaxed">
-                      All encrypted messages are stored on-chain. No central server can access, censor, or delete your data. Your encryption keys ensure only you can read your messages.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 bg-cyan-500/5 border border-cyan-500/20 rounded-lg">
-                <p className="text-xs text-cyan-300 leading-relaxed">
-                  <strong className="text-cyan-400">Security Note:</strong> Enable "Session Persistence" in Settings to keep your session active until browser close. Your session key is encrypted using a non-exportable browser key—even with persistence, your PIN and mailbox keys are never stored.
-                </p>
-              </div>
-            </div>
-          </div>
+          <HowMailboxesWork />
         </div>
       </div>
     </div>

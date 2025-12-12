@@ -72,24 +72,24 @@ export const useMailboxCreation = () => {
   ): Promise<{ needsRecovery: boolean; publicKey?: string; fullName?: string }> => {
     try {
       const fullName = `${accountName}@${domain}`;
-      const namedAccount = await contractService.getNamedAccount(fullName);
+      const hashIDAccount = await contractService.getHashIDAccount(fullName);
 
-      if (!namedAccount.isActive || namedAccount.owner === ethers.ZeroAddress) {
+      if (!hashIDAccount.isActive || hashIDAccount.owner === ethers.ZeroAddress) {
         return { needsRecovery: false };
       }
 
-      if (namedAccount.owner.toLowerCase() !== address.toLowerCase()) {
+      if (hashIDAccount.owner.toLowerCase() !== address.toLowerCase()) {
         throw new Error(
-          `Account ${fullName} is owned by a different wallet (${namedAccount.owner}). This may indicate front-running or the name was already taken.`
+          `Account ${fullName} is owned by a different wallet (${hashIDAccount.owner}). This may indicate front-running or the name was already taken.`
         );
       }
 
-      const keyExists = await contractService.hasKey(address, namedAccount.publicKey);
+      const keyExists = await contractService.hasKey(address, hashIDAccount.publicKey);
 
       if (!keyExists) {
         return {
           needsRecovery: true,
-          publicKey: namedAccount.publicKey,
+          publicKey: hashIDAccount.publicKey,
           fullName,
         };
       }
@@ -112,23 +112,23 @@ export const useMailboxCreation = () => {
   ): Promise<{ success: boolean; error?: string }> => {
     const steps = [
       {
-        title: 'Generate Keys',
-        description: 'Creating encryption keys from PIN and wallet signature',
+        title: 'Derive Keys',
+        description: 'Sign in wallet to generate your encryption keys',
         status: 'active' as const,
       },
       {
-        title: 'Check Availability',
-        description: accountName && domain ? `Checking ${accountName}@${domain} status` : 'Checking PIN uniqueness',
+        title: 'Verify',
+        description: accountName && domain ? `Check ${accountName}@${domain} availability` : 'Ensure keys are unique',
         status: 'pending' as const,
       },
       {
-        title: 'Register Account',
-        description: accountName && domain ? `Registering ${accountName}@${domain} on blockchain` : 'Saving mailbox locally',
+        title: 'Create Account',
+        description: accountName && domain ? `Transaction: Register ${accountName}@${domain}` : 'Transaction: Create account on-chain',
         status: 'pending' as const,
       },
       {
-        title: 'Register Keys',
-        description: 'Registering public key on KeyRegistry',
+        title: 'Link Keys',
+        description: 'Transaction: Store public key on-chain',
         status: 'pending' as const,
       },
     ];
@@ -272,9 +272,9 @@ export const useMailboxCreation = () => {
             : null
         );
 
-        // Register named account with retry
+        // Register account with HashID with retry
         const namedTx = await retryTransaction(() => 
-          contractService.registerNamedAccount(
+          contractService.registerAccountWithHashID(
             accountName,
             domain,
             keyHex,
@@ -282,7 +282,7 @@ export const useMailboxCreation = () => {
           )
         );
         
-        console.log('⏳ Waiting for NamedAccountRegistered event...');
+        console.log('⏳ Waiting for AccountWithHashIDRegistered event...');
         const receipt = await namedTx.wait();
         
         if (!receipt || receipt.status !== 1) {

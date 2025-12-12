@@ -85,7 +85,7 @@ export const About: React.FC = () => {
                 and the law is open source.
               </p>
               <p>
-                If this website disappeared tomorrow, every message, every Guild, every HashdTag would 
+                If this website disappeared tomorrow, every message, every Guild, every HashID would 
                 still exist. That's not a feature — that's the entire point.""
               </p>
                   <p>

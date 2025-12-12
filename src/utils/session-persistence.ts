@@ -1,27 +1,50 @@
 /**
- * Simple Session Persistence
+ * Session Persistence
  * 
- * Stores keyPair in sessionStorage when persistence is enabled
- * This is a simplified version that works with the existing SimpleKeyManager
+ * Simple, self-contained session persistence for keyPair storage.
+ * Stores keyPair in sessionStorage when persistence is enabled.
  */
 
-import { SessionKeyManager } from './session-key-manager';
 import { CryptoKeyPair } from './crypto-simple';
 
 const SESSION_KEYPAIR_KEY = 'hashd_session_keypair';
+const SESSION_PERSISTENCE_KEY = 'hashd_session_persistence_enabled';
 
 export class SessionPersistence {
   /**
-   * Save keyPair to sessionStorage if persistence is enabled
+   * Check if session persistence is enabled (default: true)
    */
-  static async saveSession(walletAddress: string, keyPair: CryptoKeyPair): Promise<void> {
-    if (!SessionKeyManager.isSessionPersistenceEnabled()) {
-      console.log('📍 [SessionPersistence] Persistence disabled - skipping save');
+  static isEnabled(): boolean {
+    return localStorage.getItem(SESSION_PERSISTENCE_KEY) !== 'false';
+  }
+
+  /**
+   * Enable session persistence
+   */
+  static enable(): void {
+    localStorage.setItem(SESSION_PERSISTENCE_KEY, 'true');
+    console.log('✅ [SessionPersistence] Enabled');
+  }
+
+  /**
+   * Disable session persistence and clear stored session
+   */
+  static disable(): void {
+    localStorage.setItem(SESSION_PERSISTENCE_KEY, 'false');
+    sessionStorage.removeItem(SESSION_KEYPAIR_KEY);
+    console.log('🔒 [SessionPersistence] Disabled and cleared');
+  }
+
+  /**
+   * Save keyPair to sessionStorage (only if persistence is enabled)
+   */
+  static saveSession(walletAddress: string, keyPair: CryptoKeyPair): void {
+    if (!this.isEnabled()) {
+      console.log('📍 [SessionPersistence] Disabled - skipping save');
       return;
     }
 
     try {
-      // Encrypt the keyPair using SessionKeyManager
       const sessionData = {
         walletAddress,
         publicKey: Array.from(keyPair.publicKey),
@@ -29,46 +52,44 @@ export class SessionPersistence {
         timestamp: Date.now()
       };
 
-      // For now, store directly (we can add encryption later)
-      // The SessionKeyManager already handles browser-level encryption
       sessionStorage.setItem(SESSION_KEYPAIR_KEY, JSON.stringify(sessionData));
-      console.log('✅ [SessionPersistence] Saved keyPair to sessionStorage for wallet:', walletAddress.slice(0, 10) + '...');
+      console.log('✅ [SessionPersistence] Saved session for:', walletAddress.slice(0, 10) + '...');
     } catch (error) {
-      console.error('❌ [SessionPersistence] Failed to save session:', error);
+      console.error('❌ [SessionPersistence] Failed to save:', error);
     }
   }
 
   /**
-   * Restore keyPair from sessionStorage if available
+   * Restore keyPair from sessionStorage
    */
   static restoreSession(): { walletAddress: string; keyPair: CryptoKeyPair } | null {
-    if (!SessionKeyManager.isSessionPersistenceEnabled()) {
-      console.log('📍 [SessionPersistence] Persistence disabled - skipping restore');
+    console.log('🔍 [SessionPersistence] Attempting restore...');
+    console.log('🔍 [SessionPersistence] isEnabled:', this.isEnabled());
+    console.log('🔍 [SessionPersistence] sessionStorage key exists:', sessionStorage.getItem(SESSION_KEYPAIR_KEY) !== null);
+    
+    if (!this.isEnabled()) {
+      console.log('📍 [SessionPersistence] Disabled - skipping restore');
       return null;
     }
 
     try {
       const stored = sessionStorage.getItem(SESSION_KEYPAIR_KEY);
       if (!stored) {
-        console.log('📍 [SessionPersistence] No saved session found');
+        console.log('📍 [SessionPersistence] No session data in sessionStorage');
         return null;
       }
 
       const sessionData = JSON.parse(stored);
-      const keyPair: CryptoKeyPair = {
-        publicKey: new Uint8Array(sessionData.publicKey),
-        privateKey: new Uint8Array(sessionData.privateKey)
-      };
-
-      const ageSeconds = Math.floor((Date.now() - sessionData.timestamp) / 1000);
-      console.log('✅ [SessionPersistence] Restored session for wallet:', sessionData.walletAddress.slice(0, 10) + '... (age: ' + ageSeconds + 's)');
-
+      console.log('✅ [SessionPersistence] Restored session for:', sessionData.walletAddress?.slice(0, 10) + '...');
       return {
         walletAddress: sessionData.walletAddress,
-        keyPair
+        keyPair: {
+          publicKey: new Uint8Array(sessionData.publicKey),
+          privateKey: new Uint8Array(sessionData.privateKey)
+        }
       };
     } catch (error) {
-      console.error('❌ [SessionPersistence] Failed to restore session:', error);
+      console.error('❌ [SessionPersistence] Failed to restore:', error);
       return null;
     }
   }
@@ -78,11 +99,10 @@ export class SessionPersistence {
    */
   static clearSession(): void {
     sessionStorage.removeItem(SESSION_KEYPAIR_KEY);
-    console.log('🗑️ [SessionPersistence] Cleared session from sessionStorage');
   }
 
   /**
-   * Check if a session exists
+   * Check if a session exists in storage
    */
   static hasSession(): boolean {
     return sessionStorage.getItem(SESSION_KEYPAIR_KEY) !== null;

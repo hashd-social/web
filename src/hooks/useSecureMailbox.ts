@@ -125,10 +125,10 @@ export const useSecureMailbox = (): UseSecureMailboxReturn => {
   }, []);
   
   /**
-   * Enable session persistence
+   * Enable session persistence (also persists any existing in-memory sessions)
    */
-  const enableSessionPersistence = useCallback(() => {
-    SecureMailboxManager.enableSessionPersistence();
+  const enableSessionPersistence = useCallback(async () => {
+    await SecureMailboxManager.enableSessionPersistence();
     setIsSessionPersistenceEnabled(true);
     console.log('✅ [useSecureMailbox] Session persistence enabled');
   }, []);

@@ -403,6 +403,7 @@ export interface MailboxInfo {
   pin: string;
   name: string;
   publicKeyHash: string;
+  publicKey?: string; // Full public key hex for comparison with blockchain accounts
   createdAt: number;
   lastUsed: number;
   isIncomplete?: boolean;
@@ -413,7 +414,7 @@ export interface MailboxInfo {
 export class SimpleKeyManager {
   private static readonly MAILBOXES_KEY = 'hashd_mailboxes';
   private static readonly VERSION_KEY = 'hashd_key_version';
-  private static readonly CURRENT_VERSION = 'v5-deterministic';
+  private static readonly CURRENT_VERSION = 'v1-deterministic';
   
   // Legacy constants (only used for cleanup of old insecure storage)
   private static readonly KEYS_PREFIX = 'hashd_keys_';
@@ -423,16 +424,17 @@ export class SimpleKeyManager {
   static checkVersion(): void {
     const storedVersion = localStorage.getItem(this.VERSION_KEY);
     if (storedVersion !== this.CURRENT_VERSION) {
-      console.warn(' Key generation version changed - clearing old mailboxes');
+      console.warn('⚠️ Key generation version changed');
       console.warn(`  Old version: ${storedVersion || 'none'}`);
       console.warn(`  New version: ${this.CURRENT_VERSION}`);
       console.warn('  Please recreate your mailboxes with the same PINs');
       
-      // Clear all old data
+      // Clear old KEY data only (not mailbox metadata)
+      // Mailbox metadata (names, hashes) should persist so users can restore
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (key.includes('hashd_') || key.includes('hashd_'))) {
+        if (key && key.startsWith('hashd_keys_')) {
           keysToRemove.push(key);
         }
       }
@@ -441,7 +443,7 @@ export class SimpleKeyManager {
       // Set new version
       localStorage.setItem(this.VERSION_KEY, this.CURRENT_VERSION);
       
-      console.log(' Old mailboxes cleared - ready for fresh start');
+      console.log('✅ Version updated - mailbox metadata preserved');
     }
   }
   
@@ -550,39 +552,84 @@ export class SimpleKeyManager {
     }
   }
   
-  // Check and clear old incompatible keys (call this on app init)
-  static clearOldKeysIfNeeded(walletAddress?: string): void {
-    const mailboxesKey = this.getWalletKey(this.MAILBOXES_KEY, walletAddress);
-    const mailboxesJson = localStorage.getItem(mailboxesKey);
-    if (!mailboxesJson) return;
-    
-    try {
-      const mailboxes = JSON.parse(mailboxesJson);
-      
-      // Check if we have old 32-byte keys (pre-symmetric)
-      // New keys: both 32 bytes (symmetric)
-      // This check is just to ensure data integrity
-      for (const m of mailboxes) {
-        const keysKey = this.getWalletKey(this.KEYS_PREFIX + m.pin, walletAddress);
-        const stored = localStorage.getItem(keysKey);
-        if (stored) {
-          try {
-            const keyData = JSON.parse(stored);
-            // If keys exist and are valid, we're good
-            if (keyData.publicKey && keyData.privateKey) {
-              continue;
-            }
-          } catch (e) {
-            // Invalid key data, clear everything
-            console.warn('⚠️ Detected corrupted keys. Clearing...');
-            localStorage.removeItem(mailboxesKey);
-            return;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check old keys:', error);
+  /**
+   * Save mailboxes to localStorage (replaces entire list)
+   * Safety: Will not save empty array if mailboxes already exist (prevents accidental wipe)
+   */
+  static saveMailboxList(mailboxes: MailboxInfo[], walletAddress: string, force = false): boolean {
+    if (!walletAddress) {
+      console.warn('⚠️ Cannot save mailboxes without wallet address');
+      return false;
     }
+    
+    const mailboxesKey = this.getWalletKey(this.MAILBOXES_KEY, walletAddress);
+    
+    // Safety: Don't overwrite existing mailboxes with empty array unless forced
+    if (mailboxes.length === 0 && !force) {
+      const existing = localStorage.getItem(mailboxesKey);
+      if (existing) {
+        console.warn('⚠️ Refusing to overwrite existing mailboxes with empty array');
+        return false;
+      }
+    }
+    
+    localStorage.setItem(mailboxesKey, JSON.stringify(mailboxes));
+    return true;
+  }
+  
+  /**
+   * Update a specific mailbox by publicKeyHash
+   */
+  static updateMailbox(
+    walletAddress: string, 
+    publicKeyHash: string, 
+    updates: Partial<Omit<MailboxInfo, 'publicKeyHash'>>
+  ): boolean {
+    if (!walletAddress) return false;
+    
+    const mailboxes = this.getMailboxList(walletAddress);
+    const index = mailboxes.findIndex(m => m.publicKeyHash === publicKeyHash);
+    
+    if (index === -1) {
+      console.warn(`⚠️ Mailbox not found: ${publicKeyHash}`);
+      return false;
+    }
+    
+    mailboxes[index] = { ...mailboxes[index], ...updates };
+    return this.saveMailboxList(mailboxes, walletAddress, true);
+  }
+  
+  /**
+   * Rename a mailbox
+   */
+  static renameMailbox(walletAddress: string, publicKeyHash: string, newName: string): boolean {
+    return this.updateMailbox(walletAddress, publicKeyHash, { name: newName });
+  }
+  
+  /**
+   * Delete a specific mailbox by publicKeyHash
+   */
+  static deleteMailboxByHash(publicKeyHash: string, walletAddress: string): boolean {
+    if (!walletAddress) return false;
+    
+    const mailboxes = this.getMailboxList(walletAddress);
+    const filtered = mailboxes.filter(m => m.publicKeyHash !== publicKeyHash);
+    
+    if (filtered.length === mailboxes.length) {
+      console.warn(`⚠️ Mailbox not found: ${publicKeyHash}`);
+      return false;
+    }
+    
+    return this.saveMailboxList(filtered, walletAddress, true);
+  }
+  
+  /**
+   * Clear all mailboxes for a wallet (use with caution)
+   */
+  static clearMailboxes(walletAddress: string): void {
+    if (!walletAddress) return;
+    const mailboxesKey = this.getWalletKey(this.MAILBOXES_KEY, walletAddress);
+    localStorage.removeItem(mailboxesKey);
   }
   
   // Get current mailbox PIN
@@ -645,37 +692,34 @@ export class SimpleKeyManager {
     console.log('✅ Mailbox deleted (metadata removed)');
   }
   
-  // Clear all keys (disconnect)
+  /**
+   * Clear session keys (memory only)
+   * Does NOT clear mailbox metadata - that should persist for restoration
+   */
   static clearKeys(walletAddress?: string): void {
-    // Clear session memory
+    // Clear session memory (RAM)
     this.sessionKeys.clear();
     console.log('🗑️ Cleared session memory');
     
-    // Clear sessionStorage
+    // Clear legacy key storage from localStorage (hashd_keys_*)
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(this.KEYS_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Clear current mailbox pointer (but NOT mailbox list)
     if (walletAddress) {
-      const mailboxes = this.getMailboxList(walletAddress);
-      mailboxes.forEach(m => {
-        const pinHash = this.getPinHash(m.pin, walletAddress);
-        const sessionKey = `${walletAddress}_${pinHash}`;
-        sessionStorage.removeItem(sessionKey);
-      });
-      console.log('🗑️ Cleared sessionStorage');
-    } else {
-      // Clear all sessionStorage if no specific wallet
-      sessionStorage.clear();
+      const currentKey = this.getWalletKey(this.CURRENT_MAILBOX_KEY, walletAddress);
+      localStorage.removeItem(currentKey);
     }
     
-    // Clear localStorage (old keys if any exist)
-    const mailboxes = this.getMailboxList(walletAddress);
-    mailboxes.forEach(m => {
-      const keysKey = this.getWalletKey(this.KEYS_PREFIX + m.pin, walletAddress);
-      localStorage.removeItem(keysKey);
-    });
-    const mailboxesKey = this.getWalletKey(this.MAILBOXES_KEY, walletAddress);
-    const currentKey = this.getWalletKey(this.CURRENT_MAILBOX_KEY, walletAddress);
-    localStorage.removeItem(mailboxesKey);
-    localStorage.removeItem(currentKey);
-    console.log('🗑️ Cleared localStorage');
+    // NOTE: Mailbox metadata (hashd_mailboxes_*) is NOT cleared
+    // This allows users to restore their mailboxes by entering their PIN
+    console.log('🗑️ Cleared keys (mailbox metadata preserved)');
   }
   
   /**
@@ -688,7 +732,7 @@ export class SimpleKeyManager {
     pin: string
   ): Promise<CryptoKeyPair> {
     // Create deterministic message with PIN
-    const keyDerivationMessage = `HASHD Mailbox Creation v4\nAddress: ${userAddress}\nPIN: ${pin}\nAlgorithm: AES-256-GCM-ECDH`;
+    const keyDerivationMessage = `HASHD Mailbox Creation v1\nAddress: ${userAddress}\nPIN: ${pin}\nAlgorithm: AES-256-GCM-ECDH`;
     console.log('🔐 Signing message for deterministic key derivation');
     
     const signature = await signer.signMessage(keyDerivationMessage);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Clock, Zap, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react';
-import { SESSION_DURATION_OPTIONS } from '../utils/sessionConfig';
+import { SESSION_DURATION_OPTIONS } from '../../utils/sessionConfig';
 
 interface SessionInfo {
   address: string;
@@ -135,7 +135,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   return (
     <div className="bg-gray-800/50 rounded-lg p-6">
       <div className="flex items-center space-x-3 mb-4">
-        <Shield className="w-6 h-6 neon-text-cyan" />
         <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider font-mono">Account Abstraction</h3>
       </div>
 

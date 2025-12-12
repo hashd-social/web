@@ -40,25 +40,26 @@ export const usePinValidation = () => {
       // Check blockchain
       const keyHex = SimpleCryptoUtils.publicKeyToHex(keyPair.publicKey);
 
-      // Check bare account
+      // Check all accounts for this address
       try {
-        const hasBare = await contractService.hasBareAccount(address);
-        if (hasBare) {
-          const bareAccount = await contractService.getBareAccount(address);
-          if (bareAccount.publicKey.toLowerCase() === keyHex.toLowerCase()) {
-            setError('This PIN is already used for a bare account. Please use a different PIN.');
+        const accountCount = await contractService.getAccountCount(address);
+        for (let i = 0; i < accountCount; i++) {
+          const account = await contractService.getAccount(address, i);
+          if (account.isActive && account.publicKey.toLowerCase() === keyHex.toLowerCase()) {
+            const accountName = account.hashIDName || `Account ${i + 1}`;
+            setError(`This PIN is already used for "${accountName}". Please use a different PIN.`);
             setIsChecking(false);
             return;
           }
         }
       } catch (error) {
-        console.log('No bare account found or error checking:', error);
+        console.log('Error checking accounts:', error);
       }
 
-      // Check named accounts
-      const allNamedAccounts = await contractService.getOwnerNamedAccounts(address);
+      // Check HashID accounts
+      const allHashIDs = await contractService.getOwnerHashIDs(address);
 
-      for (const existingAccount of allNamedAccounts) {
+      for (const existingAccount of allHashIDs) {
         try {
           const existingPubKey = await contractService.getPublicKeyByName(existingAccount);
 

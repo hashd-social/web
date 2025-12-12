@@ -231,10 +231,7 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
               {/* Messaging Pillar */}
-              <button 
-                onClick={() => document.getElementById('messaging-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="relative group w-full text-left"
-              >
+        
 
                 <div className='p-6'>
                   <div className="flex justify-center mb-6">
@@ -249,13 +246,10 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
                     End-to-end encrypted private messages with deterministic multi-identity mailboxes
                   </p>
                 </div>
-              </button>
+       
 
               {/* Guilds Pillar */}
-              <button 
-                onClick={() => document.getElementById('guilds-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="relative group w-full text-left"
-              >
+
 
                    <div className='p-6'>
                   <div className="flex justify-center mb-6">
@@ -270,13 +264,10 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
                     Sovereign communities with token economies, encrypted posts, and on-chain governance
                   </p>
                 </div>
-              </button>
+   
 
               {/* Marketplaces Pillar */}
-              <button 
-                onClick={() => document.getElementById('marketplaces-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="relative group w-full text-left"
-              >
+    
 
                    <div className='p-6'>
                   <div className="flex justify-center mb-6">
@@ -291,7 +282,7 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
                     Censorship-resistant commerce with encrypted listings and on-chain settlement
                   </p>
                 </div>
-              </button>
+    
             </div>
 
             {/* Bottom tagline */}
@@ -349,12 +340,19 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
                   <h3 className="text-lg font-bold neon-text-cyan uppercase font-mono">Zero Backend</h3>
                 </div>
                 <p className="text-gray-300 text-sm font-mono leading-relaxed">
-                  Pure smart contracts and IPFS. No servers, no admins, no kill switch. Protocol runs itself.
+                  Pure smart contracts and the ByteCave. No servers, no admins, no kill switch. Protocol runs itself.
                 </p>
               </div>
             </div>
           </div>
           
+          {/* Section Divider */}
+          <div className="flex justify-center py-12">
+            <ChevronDown className="w-8 h-8 text-cyan-500/30 animate-bounce" />
+          </div>
+
+
+
           {/* Section Divider */}
           <div className="flex justify-center py-12">
                    <img 
@@ -367,7 +365,7 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
         </div>
       </div>
 
-      {/* HashdTags Banner - Full Width */}
+      {/* HashIDs Banner - Full Width */}
       <div className="">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
@@ -379,13 +377,13 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
           <div className="text-center">
             {/* Main Title */}
              <h2 className="text-3xl font-bold neon-text-cyan uppercase tracking-wider mb-6 text-center font-cyberpunk">
-              INTRODUCING HASHDTAGS
+              INTRODUCING HASHIDS
             </h2>
             
             {/* Description */}
             <p className="text-lg text-gray-300 mb-12 max-w-3xl mx-auto font-mono leading-relaxed">
               Your cryptographically-owned identity. Use <span className="text-green-400 font-bold">anon@hashd</span> instead of wallet addresses. 
-              Each HASHDTag is an NFT you own forever — no renewals, no subscriptions.
+              Each HashID is an NFT you own forever — no renewals, no subscriptions.
             </p>
             
             {/* Feature List */}
@@ -437,7 +435,7 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
             <div className='text-left'>
                   <h3 className="text-base font-bold text-white mb-1 font-mono uppercase">Ecosystem-Wide</h3>
                   <p className="text-gray-400 text-sm font-mono leading-relaxed">
-                    Use your HASHDTag for messaging, Guilds, marketplaces, and future features.
+                    Use your HashID for messaging, Guilds, marketplaces, and future features.
                   </p>
                 </div>
               </div>
@@ -463,7 +461,7 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
             <div className='text-left'>
                   <h3 className="text-base font-bold text-white mb-1 font-mono uppercase">Transferable & Tradeable</h3>
                   <p className="text-gray-400 text-sm font-mono leading-relaxed">
-                    HASHDTags are standard NFTs that can be bought, sold, or transferred freely.
+                    HashIDs are standard NFTs that can be bought, sold, or transferred freely.
                   </p>
                 </div>
               </div>
@@ -585,7 +583,7 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
                   <h3 className="text-lg font-bold text-green-400 uppercase font-mono">Encrypted Posts</h3>
                 </div>
                 <p className="text-gray-300 text-sm font-mono">
-                  Four-tier access system with all content encrypted and stored as IPFS ciphertext for permanence.
+                  Four-tier access system with all content encrypted and stored in the ByteCave for permanence.
                 </p>
               </div>
             </div>
@@ -619,7 +617,7 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
                   <h3 className="text-lg font-bold text-orange-400 uppercase font-mono">Encrypted Listings</h3>
                 </div>
                 <p className="text-gray-300 text-sm font-mono">
-                  All marketplace listings are encrypted and stored as IPFS ciphertext, making them truly uncensorable.
+                  All marketplace listings are encrypted and stored in the ByteCave, making them truly uncensorable.
                 </p>
               </div>
 
@@ -656,6 +654,83 @@ export const Landing: React.FC<LandingProps> = ({ onConnect, loading, error, onC
 
         </div>
       </div>
+
+               {/* ByteCave Section */}
+          <div className="mb-16 py-16 px-4 -mx-4">
+            <div className="max-w-6xl mx-auto">
+              <div className="text-center mb-12">
+                <div className="flex justify-center mb-6">
+                  <div className="w-24 h-24 rounded-full bg-cyan-500/20 flex items-center justify-center border-2 border-cyan-500/50">
+                    <HardDrive className="w-12 h-12 neon-text-cyan" />
+                  </div>
+                </div>
+                <h2 className="text-3xl font-bold neon-text-cyan uppercase tracking-wider mb-6 font-cyberpunk">
+                  THE BYTECAVE
+                </h2>
+                <p className="text-lg text-gray-300 mb-8 max-w-3xl mx-auto font-mono leading-relaxed">
+                  HASHD's encrypted storage layer — a decentralized network of independent nodes that store nothing but ciphertext.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                {/* Privacy by Design */}
+                <div className="bg-gray-800/50 rounded-lg p-6 hover:bg-gray-800/70 transition-all">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-cyan-500/20 flex items-center justify-center border-2 border-cyan-500/50">
+                      <Lock className="w-6 h-6 neon-text-cyan" />
+                    </div>
+                    <h3 className="text-lg font-bold neon-text-cyan uppercase font-mono">Privacy by Design</h3>
+                  </div>
+                  <p className="text-gray-300 text-sm font-mono leading-relaxed">
+                    Every message, post, and listing is encrypted locally on your device before upload. Nodes only ever see ciphertext — your data remains private and impossible to interpret.
+                  </p>
+                </div>
+
+                {/* Content-Addressed Storage */}
+                <div className="bg-gray-800/50 rounded-lg p-6 hover:bg-gray-800/70 transition-all">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-cyan-500/20 flex items-center justify-center border-2 border-cyan-500/50">
+                      <Fingerprint className="w-6 h-6 neon-text-cyan" />
+                    </div>
+                    <h3 className="text-lg font-bold neon-text-cyan uppercase font-mono">Content-Addressed</h3>
+                  </div>
+                  <p className="text-gray-300 text-sm font-mono leading-relaxed">
+                    Each blob is addressed by its content hash. No directories, no usernames, no databases — the cryptography itself becomes the address.
+                  </p>
+                </div>
+
+                {/* Decentralized Network */}
+                <div className="bg-gray-800/50 rounded-lg p-6 hover:bg-gray-800/70 transition-all">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-cyan-500/20 flex items-center justify-center border-2 border-cyan-500/50">
+                      <Server className="w-6 h-6 neon-text-cyan" />
+                    </div>
+                    <h3 className="text-lg font-bold neon-text-cyan uppercase font-mono">Community-Run Nodes</h3>
+                  </div>
+                  <p className="text-gray-300 text-sm font-mono leading-relaxed">
+                    Independent nodes replicate data, generate cryptographic proofs, and can be swapped without disrupting the network. No single company or server controls your data.
+                  </p>
+                </div>
+
+                {/* Censorship Resistant */}
+                <div className="bg-gray-800/50 rounded-lg p-6 hover:bg-gray-800/70 transition-all">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-cyan-500/20 flex items-center justify-center border-2 border-cyan-500/50">
+                      <Shield className="w-6 h-6 neon-text-cyan" />
+                    </div>
+                    <h3 className="text-lg font-bold neon-text-cyan uppercase font-mono">Censorship Resistant</h3>
+                  </div>
+                  <p className="text-gray-300 text-sm font-mono leading-relaxed">
+                    Messages stay available even if a UI goes offline. Guilds continue to exist even if sites hide content. Marketplaces operate without central platforms.
+                  </p>
+                </div>
+              </div>
+
+             <p className="text-gray-300 text-center font-mono leading-relaxed">
+                  <span className="text-cyan-400 font-bold">The ByteCave gives HASHD the durability of decentralized storage with the responsiveness of a modern application</span>
+                </p>
+            </div>
+          </div> 
 
 
       {/* Main Content Container */}

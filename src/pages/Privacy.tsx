@@ -74,7 +74,7 @@ export const Privacy: React.FC = () => {
             </p>
             <ul className="text-gray-300 font-mono leading-relaxed space-y-2 list-disc list-inside">
               <li><strong>Wallet addresses:</strong> Your public wallet address is visible when you interact with the protocol</li>
-              <li><strong>HashdTags:</strong> Your HashdTag name (e.g., alexx@hashd) is public and linked to your wallet</li>
+              <li><strong>HashIDs:</strong> Your HashID (e.g., alexx@hashd) is public and linked to your wallet</li>
               <li><strong>Encrypted messages:</strong> Message metadata (sender, recipient, timestamp) is public, but content is encrypted</li>
               <li><strong>Guild memberships:</strong> Your participation in Guilds is public on-chain</li>
               <li><strong>Transaction history:</strong> All blockchain transactions are public and permanent</li>

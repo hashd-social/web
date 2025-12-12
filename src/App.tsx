@@ -39,6 +39,7 @@ import { Privacy } from './pages/Privacy';
 import { Terms } from './pages/Terms';
 import { Support } from './pages/Support';
 import { Documentation } from './pages/Documentation';
+import { StyleGuide } from './pages/StyleGuide';
 import { ScrollToTop } from './components/ScrollToTop';
 
 // Load dev tools in development mode (available at window.devTools)
@@ -79,6 +80,7 @@ function App() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [modalContext, setModalContext] = useState<'initial' | 'switch' | 'create'>('initial');
   const [mailboxes, setMailboxes] = useState<MailboxInfo[]>([]);
+  const [mailboxesLoaded, setMailboxesLoaded] = useState(false);
   const [currentMailbox, setCurrentMailbox] = useState<MailboxInfo | null>(null);
   const [groupRefreshTrigger, setGroupRefreshTrigger] = useState(0);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
@@ -157,6 +159,11 @@ function App() {
   useEffect(() => {
     (window as any).__HASHD_SETTINGS__ = { rpcUrl };
   }, [rpcUrl]);
+  
+  // Initialize read-only contracts on app mount
+  useEffect(() => {
+    contractService.initializeReadOnlyContracts();
+  }, []);
 
   // Sync activeTab with current route
   useEffect(() => {
@@ -176,22 +183,9 @@ function App() {
   const accountAbstraction = useAccountAbstraction(state.userAddress, signer);
 
   // Listen for wallet and network changes
+  // Chain change listener (separate from account change to avoid duplicate listeners)
   useEffect(() => {
     if (typeof window.ethereum === 'undefined') return;
-
-    const handleAccountsChanged = (accounts: string[]) => {
-      console.log('🔄 [Wallet] Account changed:', accounts);
-      if (accounts.length === 0) {
-        // User disconnected wallet
-        console.log('👋 [Wallet] User disconnected wallet');
-        disconnectWallet(true); // Clear session data
-      } else if (state.isConnected && accounts[0].toLowerCase() !== state.userAddress.toLowerCase()) {
-        // User switched to a different account
-        console.log('🔄 [Wallet] User switched account, disconnecting...');
-        toast.warning('Wallet account changed. Please reconnect.');
-        disconnectWallet(true); // Clear session data
-      }
-    };
 
     const handleChainChanged = (chainId: string) => {
       console.log('🔄 [Network] Chain changed:', chainId);
@@ -203,18 +197,14 @@ function App() {
       }
     };
 
-    // Add listeners
-    window.ethereum.on('accountsChanged', handleAccountsChanged);
     window.ethereum.on('chainChanged', handleChainChanged);
 
-    // Cleanup
     return () => {
       if (window.ethereum?.removeListener) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
         window.ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
-  }, [state.isConnected, state.userAddress]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -262,6 +252,13 @@ function App() {
         // console.log('ℹ️ [AutoConnect] No mailboxes found for this wallet - showing connect screen');
         // Clear the stale connection state
         setDisconnected();
+        return;
+      }
+      
+      // IMPORTANT: Only auto-connect if session persistence is enabled
+      // If persistence is OFF, user must manually click Connect
+      if (!SessionPersistence.isEnabled()) {
+        console.log('📍 [AutoConnect] Persistence disabled - user must manually connect');
         return;
       }
       
@@ -339,21 +336,29 @@ function App() {
     // Listen for account changes in MetaMask
     const handleAccountsChanged = (accounts: string[]) => {
       console.log('🔄 [AccountChange] MetaMask accounts changed:', accounts);
+      console.log('   zustandWallet:', zustandWallet);
+      console.log('   state.userAddress:', state.userAddress);
+      console.log('   state.isConnected:', state.isConnected);
       
       if (accounts.length === 0) {
-        // User disconnected from MetaMask
+        // User disconnected from MetaMask - just disconnect, don't clear data
         console.log('⚠️ [AccountChange] User disconnected from MetaMask');
-        disconnectWallet(true); // Clear session data
+        disconnectWallet(false);
       } else {
         const newAccount = accounts[0].toLowerCase();
+        const currentWallet = (zustandWallet || state.userAddress || '').toLowerCase();
         
-        if (zustandWallet && newAccount !== zustandWallet.toLowerCase()) {
-          // Wallet changed - disconnect and show connect screen
+        // Only trigger disconnect if we have a current wallet AND it's different
+        if (currentWallet && newAccount !== currentWallet) {
           console.log('⚠️ [AccountChange] Wallet changed - disconnecting');
-          console.log('   Old:', zustandWallet);
+          console.log('   Old:', currentWallet);
           console.log('   New:', newAccount);
-          toast.warning('Wallet account changed. Logging out and clearing session data.');
-          disconnectWallet(true); // Clear session data
+          toast.info('Wallet account changed. Please reconnect.');
+          disconnectWallet(false); // Don't clear data - it's wallet-namespaced
+        } else if (!currentWallet) {
+          console.log('ℹ️ [AccountChange] No current wallet stored, ignoring change');
+        } else {
+          console.log('ℹ️ [AccountChange] Same wallet, no action needed');
         }
       }
     };
@@ -368,56 +373,54 @@ function App() {
         window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
       }
     };
-  }, [hasHydrated, zustandWallet, state.isConnected]); // Re-run when Zustand finishes rehydrating, wallet changes, or connection state changes
+  }, [hasHydrated, zustandWallet, state.isConnected, state.keyPair]); // Re-run when Zustand finishes rehydrating, wallet changes, connection state changes, or keyPair changes
   
   
   // Check for incomplete registrations when wallet connects
+  // This only warns if user has on-chain accounts but NO local mailboxes at all
+  // (truly new device or incomplete registration)
   useEffect(() => {
     const checkIncompleteRegistrations = async () => {
       if (!state.isConnected || !state.userAddress) return;
       
-      // Add a small delay to ensure localStorage has been read
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // If user already has a keyPair loaded, they've successfully accessed their mailbox
+      if (state.keyPair) {
+        console.log('✅ KeyPair loaded - user has access to mailbox, clearing warnings');
+        setState(prev => prev.warning ? { ...prev, warning: '' } : prev);
+        return;
+      }
+      
+      // Check localStorage DIRECTLY to avoid race conditions with React state
+      // This is the source of truth for whether mailboxes exist
+      const localMailboxes = SimpleKeyManager.getMailboxList(state.userAddress);
+      
+      // If user has local mailboxes, they just need to enter their PIN - not incomplete
+      if (localMailboxes.length > 0) {
+        console.log('✅ Local mailboxes exist in localStorage - user just needs to enter PIN');
+        setState(prev => prev.warning ? { ...prev, warning: '' } : prev);
+        return;
+      }
       
       try {
         console.log('🔍 Checking for incomplete registrations...');
         
         // Get all named accounts for this wallet
-        const namedAccounts = await contractService.getOwnerNamedAccounts(state.userAddress);
-        console.log('Named accounts for wallet:', namedAccounts);
+        const hashIDAccounts = await contractService.getOwnerHashIDs(state.userAddress);
+        console.log('Named accounts for wallet:', hashIDAccounts);
         
-        // If no named accounts, no need to check further
-        if (namedAccounts.length === 0) {
-          console.log('✅ No named accounts found - clearing any warnings');
-          setState(prev => ({
-            ...prev,
-            warning: ''
-          }));
+        // If no named accounts on-chain, nothing to warn about
+        if (hashIDAccounts.length === 0) {
+          console.log('✅ No named accounts found on-chain');
+          setState(prev => prev.warning ? { ...prev, warning: '' } : prev);
           return;
         }
         
-        // Only show warning if there are named accounts but NO local mailboxes
-        // If user has created mailboxes, they've completed registration
-        const localMailboxes = SimpleKeyManager.getMailboxList(state.userAddress);
-        const hasLocalMailboxes = localMailboxes.length > 0;
-        
-        console.log('Local mailboxes count:', localMailboxes.length);
-        console.log('Named accounts count:', namedAccounts.length);
-        
-        if (!hasLocalMailboxes) {
-          console.log('⚠️ Found incomplete registrations:', namedAccounts);
-          setState(prev => ({
-            ...prev,
-            warning: `Found incomplete registration(s): ${namedAccounts.join(', ')}. Please create a mailbox with the same name and PIN to complete the registration.`
-          }));
-        } else {
-          console.log('✅ Named accounts found and mailboxes exist - registration complete');
-          // Clear any existing warning
-          setState(prev => ({
-            ...prev,
-            warning: ''
-          }));
-        }
+        // User has on-chain accounts but no local mailboxes - new device or incomplete
+        console.log('⚠️ On-chain accounts exist but no local mailboxes:', hashIDAccounts);
+        setState(prev => ({
+          ...prev,
+          warning: `Found on-chain account(s): ${hashIDAccounts.join(', ')}. To access, click "Switch / Create Mailbox" and enter your PIN to restore your mailbox.`
+        }));
       } catch (error) {
         console.log('Error checking incomplete registrations:', error);
       }
@@ -428,13 +431,20 @@ function App() {
   
   
   // Resolve actual account names from public keys
-  const resolveMailboxAccountNames = async () => {
-    const walletAddr = state.userAddress || zustandWallet;
-    const loadedMailboxes = SimpleKeyManager.getMailboxList(walletAddr);
-    console.log('🔍 Resolving account names for mailboxes:', loadedMailboxes);
+  const resolveMailboxAccountNames = async (explicitWalletAddr?: string) => {
+    const walletAddr = explicitWalletAddr || state.userAddress || zustandWallet;
     
-    if (loadedMailboxes.length === 0 || !state.isConnected || !state.userAddress) {
-      console.log('⏭️  Skipping account name resolution - not ready');
+    // Safety: Don't proceed without a valid wallet address
+    if (!walletAddr) {
+      console.log('⏭️ No wallet address, skipping account name resolution');
+      return [];
+    }
+    
+    const loadedMailboxes = SimpleKeyManager.getMailboxList(walletAddr);
+    console.log(`📬 Loaded ${loadedMailboxes.length} mailboxes for wallet ${walletAddr}`);
+    
+    // If no mailboxes, return early (don't check state.isConnected here - we have explicit wallet)
+    if (loadedMailboxes.length === 0) {
       return loadedMailboxes;
     }
     
@@ -447,19 +457,19 @@ function App() {
     }
     
     // Get all named accounts for this wallet once
-    let namedAccounts: string[] = [];
+    let hashIDAccounts: string[] = [];
     try {
-      namedAccounts = await contractService.getOwnerNamedAccounts(state.userAddress);
-      console.log(`📋 Found ${namedAccounts.length} named accounts for wallet:`, namedAccounts);
+      hashIDAccounts = await contractService.getOwnerHashIDs(walletAddr);
+      console.log(`📋 Found ${hashIDAccounts.length} named accounts for wallet:`, hashIDAccounts);
     } catch (error) {
       console.warn('Could not fetch named accounts for wallet:', error);
       return loadedMailboxes;
     }
     
-    // Build a map of publicKeyHash -> {accountName, timestamp}
-    const publicKeyHashToInfo = new Map<string, { name: string; timestamp: number }>();
+    // Build a map of publicKeyHash -> {accountName, timestamp, publicKey}
+    const publicKeyHashToInfo = new Map<string, { name: string; timestamp: number; publicKey: string }>();
     
-    for (const accountName of namedAccounts) {
+    for (const accountName of hashIDAccounts) {
       try {
         const accountInfo = await contractService.getNamedAccountInfo(accountName);
         // Get the public key bytes and compute the hash (first 16 bytes)
@@ -467,7 +477,7 @@ function App() {
         const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
         // Store timestamp in milliseconds (contract returns seconds, so multiply by 1000)
         const timestampMs = accountInfo.timestamp * 1000;
-        publicKeyHashToInfo.set(publicKeyHash, { name: accountName, timestamp: timestampMs });
+        publicKeyHashToInfo.set(publicKeyHash, { name: accountName, timestamp: timestampMs, publicKey: accountInfo.publicKey });
         console.log(`🔑 Mapped ${accountName} -> hash ${publicKeyHash}, registered: ${new Date(timestampMs).toLocaleString()}`);
       } catch (error) {
         console.warn(`Could not get info for account ${accountName}:`, error);
@@ -480,10 +490,11 @@ function App() {
       
       if (matchedInfo) {
         console.log(`✅ Matched mailbox ${index} (hash: ${mailbox.publicKeyHash}) to account: ${matchedInfo.name}`);
-        // Update with blockchain timestamp
+        // Update with blockchain timestamp and public key
         return { 
           ...mailbox, 
           name: matchedInfo.name,
+          publicKey: matchedInfo.publicKey,
           createdAt: matchedInfo.timestamp // Use blockchain registration timestamp
         };
       }
@@ -502,9 +513,11 @@ function App() {
       return { ...mailbox, name: preservedName };
     });
     
-    // Update localStorage with resolved names
-    localStorage.setItem('hashd_mailboxes', JSON.stringify(resolvedMailboxes));
-    console.log('✅ Updated mailbox names with resolved account names');
+    // Update localStorage with resolved names using centralized method
+    if (walletAddr && resolvedMailboxes.length > 0) {
+      SimpleKeyManager.saveMailboxList(resolvedMailboxes, walletAddr);
+      console.log('✅ Updated mailbox names with resolved account names');
+    }
     
     return resolvedMailboxes;
   };
@@ -531,17 +544,22 @@ function App() {
 
   // Refresh mailboxes when needed
   const refreshMailboxes = async (explicitWalletAddr?: string, explicitKeyPair?: CryptoKeyPair) => {
-    let mailboxes;
+    let mailboxes: MailboxInfo[] = [];
     
     // Use explicit address if provided, otherwise fall back to state or zustand
     const walletAddr = explicitWalletAddr || state.userAddress || zustandWallet;
+    console.log('📬 refreshMailboxes called with walletAddr:', walletAddr, 'isConnected:', state.isConnected);
     
-    if (state.isConnected) {
-      // If connected, resolve actual account names
-      mailboxes = await resolveMailboxAccountNames();
-    } else {
-      // If not connected, just load from storage
+    if (state.isConnected && walletAddr) {
+      // If connected, resolve actual account names (pass wallet address explicitly)
+      mailboxes = await resolveMailboxAccountNames(walletAddr);
+    } else if (walletAddr) {
+      // If not connected but have wallet, just load from storage
       mailboxes = SimpleKeyManager.getMailboxList(walletAddr);
+    } else {
+      // No wallet address available
+      console.log('⏭️ No wallet address available, returning empty mailboxes');
+      mailboxes = [];
     }
     
     // Remove duplicates based on publicKeyHash (should not happen, but safety check)
@@ -550,6 +568,7 @@ function App() {
     );
     
     setMailboxes(uniqueMailboxes);
+    setMailboxesLoaded(true);
     
     // Update current mailbox based on active keyPair
     // Use explicit keyPair if provided (to avoid race condition with state updates)
@@ -774,32 +793,32 @@ function App() {
     try {
       console.log('🔍 Checking for incomplete registration...');
       
-      // Check if named account exists
+      // Check if HashID account exists
       const fullName = `${accountName}@${domain}`;
-      const namedAccount = await contractService.getNamedAccount(fullName);
+      const hashIDAccount = await contractService.getHashIDAccount(fullName);
       
-      console.log('Named account:', namedAccount);
+      console.log('Named account:', hashIDAccount);
       
       // If account doesn't exist or isn't active, not incomplete
-      if (!namedAccount.isActive) {
+      if (!hashIDAccount.isActive) {
         console.log('✅ Account not registered');
         return { needsRecovery: false };
       }
       
       // FRONT-RUNNING PROTECTION: Verify the current wallet owns this account
-      if (namedAccount.owner.toLowerCase() !== address.toLowerCase()) {
+      if (hashIDAccount.owner.toLowerCase() !== address.toLowerCase()) {
         console.log('❌ Front-running detected: Account owned by different address');
         console.log('Expected owner:', address.toLowerCase());
-        console.log('Actual owner:', namedAccount.owner.toLowerCase());
-        throw new Error(`This account is owned by a different wallet. You cannot recover this registration. Account owner: ${namedAccount.owner}`);
+        console.log('Actual owner:', hashIDAccount.owner.toLowerCase());
+        throw new Error(`This account is owned by a different wallet. You cannot recover this registration. Account owner: ${hashIDAccount.owner}`);
       }
       
       // Account exists and is owned by current wallet
       // Now check if the public key from the named account is registered in KeyRegistry
       try {
-        const keyExists = await contractService.hasKey(address, namedAccount.publicKey);
+        const keyExists = await contractService.hasKey(address, hashIDAccount.publicKey);
         console.log('Key exists in KeyRegistry:', keyExists);
-        console.log('Named account public key:', namedAccount.publicKey);
+        console.log('Named account public key:', hashIDAccount.publicKey);
         
         // Check if the key is registered
         if (keyExists) {
@@ -807,11 +826,11 @@ function App() {
           return { needsRecovery: false };
         } else {
           console.log('⚠️ Key NOT registered in KeyRegistry - incomplete registration detected!');
-          console.log('Named account has:', namedAccount.publicKey);
+          console.log('Named account has:', hashIDAccount.publicKey);
           return {
             needsRecovery: true,
             fullName,
-            publicKey: namedAccount.publicKey,
+            publicKey: hashIDAccount.publicKey,
             accountName,
             domain
           };
@@ -822,7 +841,7 @@ function App() {
         return {
           needsRecovery: true,
           fullName,
-          publicKey: namedAccount.publicKey,
+          publicKey: hashIDAccount.publicKey,
           accountName,
           domain
         };
@@ -843,23 +862,23 @@ function App() {
     // Initialize progress tracking
     const steps = [
       {
-        title: 'Generate Keys',
-        description: 'Creating encryption keys from PIN and wallet signature',
+        title: 'Derive Keys',
+        description: 'Sign in wallet to generate your encryption keys',
         status: 'active' as const,
       },
       {
-        title: 'Check Availability',
-        description: accountName && domain ? `Checking ${accountName}@${domain} status` : 'Checking PIN uniqueness',
+        title: 'Verify',
+        description: accountName && domain ? `Check ${accountName}@${domain} availability` : 'Ensure keys are unique',
         status: 'pending' as const,
       },
       {
-        title: 'Register Account',
-        description: accountName && domain ? `Registering ${accountName}@${domain} on blockchain` : 'Saving mailbox locally',
+        title: 'Create Account',
+        description: accountName && domain ? `Transaction: Register ${accountName}@${domain}` : 'Transaction: Create account on-chain',
         status: 'pending' as const,
       },
       {
-        title: 'Register Keys',
-        description: 'Registering public key on KeyRegistry',
+        title: 'Link Keys',
+        description: 'Transaction: Store public key on-chain',
         status: 'pending' as const,
       },
     ];
@@ -957,22 +976,22 @@ function App() {
       if (existingKeyOnChain) {
         console.log('🔍 Verifying account consistency...');
         
-        // Check bare account
+        // Check all accounts for matching public key
         try {
-          const hasBare = await contractService.hasBareAccount(address);
-          if (hasBare) {
-            const bareAccount = await contractService.getBareAccount(address);
-            if (bareAccount.publicKey.toLowerCase() === keyHex.toLowerCase()) {
-              console.log('✅ Matches bare account');
+          const accountCount = await contractService.getAccountCount(address);
+          for (let i = 0; i < accountCount; i++) {
+            const account = await contractService.getAccount(address, i);
+            if (account.publicKey.toLowerCase() === keyHex.toLowerCase()) {
+              console.log(`✅ Matches account ${i}${account.hashIDName ? ` (${account.hashIDName})` : ''}`);
             }
           }
         } catch (error) {
-          console.log('No bare account or error checking:', error);
+          console.log('Error checking accounts:', error);
         }
         
         // Check named accounts
         try {
-          const allNamedAccounts = await contractService.getOwnerNamedAccounts(address);
+          const allNamedAccounts = await contractService.getOwnerHashIDs(address);
           for (const existingAccount of allNamedAccounts) {
             try {
               const existingPubKey = await contractService.getPublicKeyByName(existingAccount);
@@ -1083,27 +1102,25 @@ function App() {
         // Calculate registration fee based on name length
         const fee = await contractService.calculateNameFee(accountName, domain);
         
-        // Check if this wallet already has any named accounts on-chain
-        const existingAccounts = await contractService.getOwnerNamedAccounts(address);
-        const hasBareAccount = await contractService.hasBareAccount(address);
-        const isFirstAccount = existingAccounts.length === 0 && !hasBareAccount;
-        const isFreeEligible = isFirstAccount && accountName.length >= 5;
+        // Check if this wallet already has any HashIDs on-chain (for free eligibility)
+        const existingHashIDs = await contractService.getOwnerHashIDs(address);
+        const isFirstHashID = existingHashIDs.length === 0;
+        const isFreeEligible = isFirstHashID && accountName.length >= 5;
         
         console.log(`💰 Registration fee for "${accountName}" (${accountName.length} chars): ${ethers.formatEther(fee)} ETH`);
-        console.log(`📊 Existing named accounts on-chain: ${existingAccounts.length}`);
-        console.log(`📊 Has bare account: ${hasBareAccount ? 'YES' : 'NO'}`);
-        console.log(`🎉 First account: ${isFirstAccount ? 'YES' : 'NO'}`);
+        console.log(`📊 Existing HashIDs on-chain: ${existingHashIDs.length}`);
+        console.log(`🎉 First HashID: ${isFirstHashID ? 'YES' : 'NO'}`);
         console.log(`🆓 Free eligible (5+ chars): ${isFreeEligible ? 'YES (FREE!)' : 'NO (payment required)'}`);
         
         if (!isFreeEligible && fee > 0) {
           console.log(`💳 Payment required: ${ethers.formatEther(fee)} ETH`);
         }
         
-        console.log('📧 Registering named account...');
+        console.log('📧 Registering account with HashID...');
         try {
-          const namedTx = await contractService.registerNamedAccount(accountName, domain, keyHex, isFreeEligible ? BigInt(0) : fee);
+          const namedTx = await contractService.registerAccountWithHashID(accountName, domain, keyHex, isFreeEligible ? BigInt(0) : fee);
           await namedTx.wait();
-          console.log(`✅ Named account ${accountName}@${domain} registered on blockchain`);
+          console.log(`✅ Account with HashID ${accountName}@${domain} registered on blockchain`);
         } catch (regError: any) {
           console.error('❌ Account registration failed:', regError);
           
@@ -1126,17 +1143,12 @@ function App() {
           throw new Error(errorMsg);
         }
       } else {
-        // No name provided, register bare account only
-        const hasBare = await contractService.hasBareAccount(address);
-        
-        if (!hasBare) {
-          console.log('📧 Registering bare account (FREE)...');
-          const bareTx = await contractService.registerBareAccount(keyHex);
-          await bareTx.wait();
-          console.log(`✅ Bare account registered for ${address}`);
-        } else {
-          console.log('✅ Bare account already exists');
-        }
+        // No name provided, register account without HashID
+        // Note: You can have multiple accounts per wallet, so always register
+        console.log('📧 Registering account (FREE)...');
+        const accountTx = await contractService.registerAccount(keyHex);
+        await accountTx.wait();
+        console.log(`✅ Account registered for ${address}`);
       }
       
       // Step 3 complete - move to step 4
@@ -1263,39 +1275,40 @@ function App() {
       let accountName = '';
       
       try {
-        // First check if there's a bare account with this public key
-        const hasBareAccount = await contractService.hasBareAccount(address);
-        if (hasBareAccount) {
-          const bareAccountPubKey = await contractService.getPublicKeyByAddress(address);
-          if (bareAccountPubKey.toLowerCase() === publicKeyHex.toLowerCase()) {
+        // Check all accounts for matching public key
+        const accountCount = await contractService.getAccountCount(address);
+        for (let i = 0; i < accountCount; i++) {
+          const account = await contractService.getAccount(address, i);
+          if (account.publicKey.toLowerCase() === publicKeyHex.toLowerCase()) {
             accountExists = true;
-            accountName = 'Bare Account';
-            console.log('✅ Found matching bare account');
+            accountName = account.hashIDName || `Account ${i + 1}`;
+            console.log(`✅ Found matching account: ${accountName}`);
+            break;
           }
         }
         
-        // If not a bare account, check named accounts
+        // Also check HashID accounts by name lookup
         if (!accountExists) {
-          const namedAccounts = await contractService.getOwnerNamedAccounts(address);
-          console.log('📋 Found named accounts:', namedAccounts);
+          const hashIDAccounts = await contractService.getOwnerHashIDs(address);
+          console.log('📋 Found HashID accounts:', hashIDAccounts);
           
-          // Match public key to find the correct named account
-          for (const namedAccount of namedAccounts) {
+          // Match public key to find the correct HashID account
+          for (const hashIDAccount of hashIDAccounts) {
             try {
-              const accountPubKey = await contractService.getPublicKeyByName(namedAccount);
-              console.log(`🔍 Checking ${namedAccount}:`);
+              const accountPubKey = await contractService.getPublicKeyByName(hashIDAccount);
+              console.log(`🔍 Checking ${hashIDAccount}:`);
               console.log(`   Generated key: ${publicKeyHex.toLowerCase()}`);
               console.log(`   Account key:   ${accountPubKey.toLowerCase()}`);
               console.log(`   Match: ${accountPubKey.toLowerCase() === publicKeyHex.toLowerCase()}`);
               
               if (accountPubKey.toLowerCase() === publicKeyHex.toLowerCase()) {
                 accountExists = true;
-                accountName = namedAccount;
+                accountName = hashIDAccount;
                 console.log('✅ Found matching named account:', accountName);
                 break;
               }
             } catch (error) {
-              console.warn('Could not check named account:', namedAccount, error);
+              console.warn('Could not check named account:', hashIDAccount, error);
             }
           }
         }
@@ -1447,6 +1460,7 @@ function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/support" element={<Support />} />
           <Route path="/documentation" element={<Documentation />} />
+          <Route path="/styleguide" element={<StyleGuide />} />
           <Route path="*" element={
             <Landing
               onConnect={connectWallet}
@@ -1594,7 +1608,7 @@ function App() {
                 onCompleteSetup={registerKey}
                 onSwitchOrCreate={() => {
                   console.log('🔄 Opening switch mailbox modal');
-                  setModalContext('switch');
+                  setModalContext('initial');
                   setShowPinPrompt(true);
                 }}
                 onSwitchMailbox={switchMailbox}
@@ -1604,6 +1618,8 @@ function App() {
             <Route path="/settings" element={
               <Settings 
                 accountAbstraction={accountAbstraction}
+                walletAddress={state.userAddress}
+                keyPair={state.keyPair}
               />
             } />
             <Route path="/system" element={
@@ -1611,6 +1627,13 @@ function App() {
                 onError={handleError}
               />
             } />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/documentation" element={<Documentation />} />
+            <Route path="/styleguide" element={<StyleGuide />} />
           </Routes>
         </div>
 
@@ -1628,21 +1651,16 @@ function App() {
         />
       )}
 
-      {/* Mailbox Switcher */}
-      {state.isConnected && (
+      {/* Mailbox Switcher - Temporarily disabled */}
+      {/* {state.isConnected && (
         <MailboxSwitcher
           mailboxes={mailboxes}
           userAddress={state.userAddress}
           onSwitch={switchMailbox}
-          onCompleteIncomplete={() => {
-            setModalContext('create');
-            setShowPinPrompt(true);
-          }}
-          onShowWarning={(message) => {
-            setState(prev => ({ ...prev, warning: message }));
-          }}
+          onCompleteIncomplete={handleCompleteIncompleteRegistration}
+          onShowWarning={(message) => toast.error(message)}
         />
-      )}
+      )} */}
 
       {/* Logout Confirmation Modal */}
       <LogoutModal

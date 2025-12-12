@@ -200,27 +200,50 @@ export class SessionKeyManager {
   }
   
   /**
-   * Check if session persistence is enabled
+   * Check if session persistence is enabled (default: true)
    */
   static isSessionPersistenceEnabled(): boolean {
-    return localStorage.getItem(this.SESSION_PERSISTENCE_KEY) === 'true';
+    // Default to true - only disabled if explicitly set to 'false'
+    return localStorage.getItem(this.SESSION_PERSISTENCE_KEY) !== 'false';
   }
   
   /**
-   * Enable session persistence
+   * Enable session persistence and persist any existing in-memory sessions
    */
-  static enableSessionPersistence(): void {
+  static async enableSessionPersistence(): Promise<void> {
     localStorage.setItem(this.SESSION_PERSISTENCE_KEY, 'true');
     console.log('✅ [SessionKeyManager] Persistence flag set in localStorage');
+    
+    // Debug: Log current session state
+    console.log(`📊 [SessionKeyManager] Current in-memory sessions: ${this.sessionKeys.size}`);
+    
+    // Persist any existing in-memory sessions
+    const entries = Array.from(this.sessionKeys.entries());
+    if (entries.length === 0) {
+      console.log('⚠️ [SessionKeyManager] No in-memory sessions to persist');
+    }
+    
+    for (const [mailboxId, sessionData] of entries) {
+      console.log('🔐 [SessionKeyManager] Persisting existing session for:', mailboxId);
+      await this.persistEncryptedSession(mailboxId, sessionData.sessionKey);
+    }
+    
+    if (this.sessionKeys.size > 0) {
+      console.log(`✅ [SessionKeyManager] Persisted ${this.sessionKeys.size} existing session(s)`);
+    }
   }
   
   /**
    * Disable session persistence
+   * Clears encrypted storage but keeps session keys in memory
    */
   static disableSessionPersistence(): void {
-    localStorage.removeItem(this.SESSION_PERSISTENCE_KEY);
+    // Set flag to explicitly disabled (not just removed)
+    localStorage.setItem(this.SESSION_PERSISTENCE_KEY, 'false');
+    // Clear all session storage - keys remain in memory only
     sessionStorage.removeItem(this.SESSION_STORAGE_KEY);
-    console.log('🔒 [SessionKeyManager] Persistence flag removed, sessions cleared');
+    sessionStorage.removeItem('hashd_session_keypair'); // Also clear SessionPersistence storage
+    console.log('🔒 [SessionKeyManager] Persistence disabled, all session storage cleared (keys remain in memory)');
   }
   
   /**
