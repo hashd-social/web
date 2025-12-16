@@ -3,7 +3,6 @@ import { X, Users, Percent, AlertCircle, CheckCircle, Download, TrendingUp, Wall
 import { ethers } from 'ethers';
 import { generateMerkleTree, calculateDistribution, getDistributionSummary, AirdropRecipient } from '../../utils/merkleTree';
 import { LoadingState } from '../Spinner';
-import { uploadTokenDistribution } from '../../services/ipfs/groupPosts';
 
 interface DistributeTokenModalProps {
   isOpen: boolean;
@@ -36,9 +35,6 @@ export const DistributeTokenModal: React.FC<DistributeTokenModalProps> = ({
   const [success, setSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isLoadingDistribution, setIsLoadingDistribution] = useState(false);
-  const [isUploadingToIPFS, setIsUploadingToIPFS] = useState(false);
-  const [ipfsCids, setIpfsCids] = useState<{ jsonCid: string; csvCid: string } | null>(null);
-  const [ipfsUploadError, setIpfsUploadError] = useState<string | null>(null);
   const [merkleData, setMerkleData] = useState<{
     root: string;
     recipients: AirdropRecipient[];
@@ -203,52 +199,31 @@ export const DistributeTokenModal: React.FC<DistributeTokenModalProps> = ({
       // Call contract to set distribution
       await onDistribute(merkleRoot, ownerPercentage, bondingCurvePercentage, finalRecipients);
 
-      // Upload to IPFS after successful blockchain transaction
-      try {
-        setIsUploadingToIPFS(true);
-        console.log('📤 Uploading distribution data to IPFS...');
-        
-        const distributionData = {
-          tokenName,
-          tokenSymbol,
-          totalSupply,
-          merkleRoot,
-          recipients: finalRecipients.map(r => ({
-            address: r.address,
-            amount: r.amount,
-            proof: proofs[r.address.toLowerCase()] || []
-          })),
-          ownerPercentage,
-          bondingCurvePercentage,
-          timestamp: new Date().toISOString()
-        };
+      // Store distribution data in localStorage (not on vault nodes)
+      const distributionData = {
+        tokenName,
+        tokenSymbol,
+        totalSupply,
+        merkleRoot,
+        recipients: finalRecipients.map(r => ({
+          address: r.address,
+          amount: r.amount,
+          proof: proofs[r.address.toLowerCase()] || []
+        })),
+        ownerPercentage,
+        bondingCurvePercentage,
+        timestamp: new Date().toISOString()
+      };
 
-        const cids = await uploadTokenDistribution(
-          tokenAddress,
-          distributionData,
-          ownerAddress
-        );
-
-        setIpfsCids(cids);
-        console.log('✅ Distribution data uploaded to IPFS:', cids);
-
-        // Store IPFS CIDs in localStorage
-        const storageData = JSON.parse(
-          localStorage.getItem(`airdrop_${tokenAddress.toLowerCase()}`) || '{}'
-        );
-        storageData.ipfsCids = cids;
-        localStorage.setItem(
-          `airdrop_${tokenAddress.toLowerCase()}`,
-          JSON.stringify(storageData)
-        );
-      } catch (ipfsErr: any) {
-        console.error('IPFS upload error:', ipfsErr);
-        // Don't fail the whole operation if IPFS upload fails
-        setIpfsUploadError(ipfsErr.message || 'IPFS upload failed');
-        setError(`Distribution successful, but IPFS upload failed: ${ipfsErr.message}`);
-      } finally {
-        setIsUploadingToIPFS(false);
-      }
+      const storageData = JSON.parse(
+        localStorage.getItem(`airdrop_${tokenAddress.toLowerCase()}`) || '{}'
+      );
+      storageData.distributionData = distributionData;
+      localStorage.setItem(
+        `airdrop_${tokenAddress.toLowerCase()}`,
+        JSON.stringify(storageData)
+      );
+      console.log('✅ Distribution data stored locally');
 
       setSuccess(true);
     } catch (err: any) {
@@ -627,82 +602,13 @@ export const DistributeTokenModal: React.FC<DistributeTokenModalProps> = ({
                 Merkle root has been set. Recipients can now claim their tokens.
               </p>
               
-              {/* Show download button only if IPFS upload succeeded */}
-              {ipfsCids ? (
-                <button
-                  onClick={downloadMerkleData}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-500/10 hover:border-cyan-500/50 neon-text-cyan rounded-lg transition-all font-bold font-mono uppercase tracking-wider"
-                >
-                  <Download className="w-5 h-5" />
-                  Download Distribution Data
-                </button>
-              ) : (
-                <div className="space-y-4">
-                  {ipfsUploadError && (
-                    <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-sm font-bold text-yellow-400 uppercase tracking-wider font-mono">IPFS Upload Failed</p>
-                          <p className="text-xs text-gray-300 mt-1 font-mono">{ipfsUploadError}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <button
-                    onClick={async () => {
-                      setIsUploadingToIPFS(true);
-                      setIpfsUploadError(null);
-                      try {
-                        const storageKey = `airdrop_${tokenAddress.toLowerCase()}`;
-                        const airdropData = localStorage.getItem(storageKey);
-                        if (!airdropData) throw new Error('Distribution data not found');
-                        
-                        const data = JSON.parse(airdropData);
-                        const distributionData = {
-                          tokenName,
-                          tokenSymbol,
-                          totalSupply,
-                          merkleRoot: data.merkleRoot,
-                          recipients: data.recipients,
-                          ownerPercentage: data.ownerPercentage,
-                          bondingCurvePercentage: data.bondingCurvePercentage,
-                          timestamp: new Date().toISOString()
-                        };
-                        
-                        const cids = await uploadTokenDistribution(
-                          tokenAddress,
-                          distributionData,
-                          ownerAddress
-                        );
-                        
-                        setIpfsCids(cids);
-                        data.ipfsCids = cids;
-                        localStorage.setItem(storageKey, JSON.stringify(data));
-                        setError('');
-                      } catch (err: any) {
-                        setIpfsUploadError(err.message || 'Retry failed');
-                      } finally {
-                        setIsUploadingToIPFS(false);
-                      }
-                    }}
-                    disabled={isUploadingToIPFS}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-yellow-500/10 border border-yellow-500/30 hover:border-yellow-500/50 text-yellow-400 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-bold font-mono uppercase tracking-wider"
-                  >
-                    {isUploadingToIPFS ? (
-                      <>
-                        <LoadingState size="sm" />
-                        <span>Uploading to IPFS...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-5 h-5" />
-                        <span>Retry IPFS Upload</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={downloadMerkleData}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-cyan-500/10 hover:border-cyan-500/50 neon-text-cyan rounded-lg transition-all font-bold font-mono uppercase tracking-wider"
+              >
+                <Download className="w-5 h-5" />
+                Download Distribution Data
+              </button>
               
               <button
                 onClick={onClose}
@@ -835,51 +741,21 @@ export const DistributeTokenModal: React.FC<DistributeTokenModalProps> = ({
                 </div>
               )}
 
-              {/* Success with IPFS CIDs */}
-              {success && ipfsCids && (
-                <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-green-400 mb-2 uppercase tracking-wider font-mono">Distribution data uploaded to IPFS!</p>
-                      <div className="space-y-2 text-xs text-gray-300">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold font-mono">JSON:</span>
-                          <code className="bg-gray-900/50 border border-green-500/30 px-2 py-1 rounded font-mono text-green-400">{ipfsCids.jsonCid}</code>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold font-mono">CSV:</span>
-                          <code className="bg-gray-900/50 border border-green-500/30 px-2 py-1 rounded font-mono text-green-400">{ipfsCids.csvCid}</code>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* IPFS Upload Status */}
-              {isUploadingToIPFS && (
-                <div className="bg-cyan-900/20 rounded-lg p-4 flex items-center gap-3">
-                  <Upload className="w-5 h-5 text-cyan-400 animate-pulse" />
-                  <p className="text-sm text-cyan-400 font-mono">Uploading distribution data to IPFS...</p>
-                </div>
-              )}
-
               {/* Actions */}
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
-                  disabled={isDistributing || isUploadingToIPFS}
+                  disabled={isDistributing}
                   className="flex-1 px-6 py-3 bg-gray-700/50 hover:border-gray-500/50 text-gray-300 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-bold font-mono uppercase tracking-wider"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDistribute}
-                  disabled={isDistributing || isUploadingToIPFS || totalRecipients === 0}
+                  disabled={isDistributing || totalRecipients === 0}
                   className="flex-1 px-6 py-3 bg-cyan-500/10 hover:border-cyan-500/50 neon-text-cyan rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-bold font-mono uppercase tracking-wider"
                 >
-                  {isDistributing ? 'Distributing...' : isUploadingToIPFS ? 'Uploading to IPFS...' : 'Distribute Tokens'}
+                  {isDistributing ? 'Distributing...' : 'Distribute Tokens'}
                 </button>
               </div>
 
