@@ -55,6 +55,18 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
     }
   };
 
+  const getTokenContracts = (): ContractInfo[] => {
+    const contracts: ContractInfo[] = [
+      {
+        name: 'HASHD Token',
+        address: process.env.REACT_APP_HASHD_TOKEN || 'Not deployed',
+        description: '🪙 ERC20 - Utility token for staking & rewards',
+        icon: '🪙'
+      }
+    ];
+    return contracts.filter(c => c.address !== 'Not deployed');
+  };
+
   const getStorageContracts = (): ContractInfo[] => {
     const contracts: ContractInfo[] = [
       {
@@ -91,6 +103,12 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
         name: 'GroupFactoryStorage',
         address: process.env.REACT_APP_GROUP_FACTORY_STORAGE || 'Not deployed',
         description: '🔒 Eternal - Group registry, metadata',
+        icon: '💾'
+      },
+      {
+        name: 'VaultNodeRegistryStorage',
+        address: process.env.REACT_APP_VAULT_REGISTRY_STORAGE || 'Not deployed',
+        description: '🔒 Eternal - Vault node registry data',
         icon: '💾'
       }
     ];
@@ -158,13 +176,25 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
         address: process.env.REACT_APP_DEPLOYMENT_REGISTRY || 'Not deployed',
         description: '🔒 Immutable - Frontend deployment verification',
         icon: '✅'
+      },
+      {
+        name: 'VaultNodeRegistryV1',
+        address: process.env.REACT_APP_VAULT_REGISTRY || 'Not deployed',
+        description: '🔄 Upgradeable - Vault node registration & management',
+        icon: '🗄️'
+      },
+      {
+        name: 'PlatformTreasury',
+        address: process.env.REACT_APP_PLATFORM_TREASURY || 'Not deployed',
+        description: '🔄 UUPS Upgradeable - Fee collection & distribution',
+        icon: '💰'
       }
     ];
     return contracts.filter(c => c.address !== 'Not deployed');
   };
 
   const getAllContracts = (): ContractInfo[] => {
-    return [...getStorageContracts(), ...getLogicContracts()];
+    return [...getTokenContracts(), ...getStorageContracts(), ...getLogicContracts()];
   };
 
   const copyToClipboard = (text: string, type: string) => {
@@ -402,6 +432,54 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
               ))}
             </div>
           </div>
+
+          {/* Token Contracts */}
+          {getTokenContracts().length > 0 && (
+            <div className="bg-gray-800/50 rounded-lg p-6 mb-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <Database className="w-6 h-6 text-yellow-400" />
+                <h3 className="text-lg font-bold text-yellow-400 font-mono">TOKEN.CONTRACTS</h3>
+                <span className="text-xs text-yellow-400 font-mono px-2 py-1 bg-yellow-500/10 rounded">ERC20</span>
+              </div>
+              <div className="text-xs text-gray-400 font-mono mb-4">
+                ERC20 utility tokens used for staking, rewards, and governance.
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {getTokenContracts().map(contract => (
+                  <div key={contract.name} className="p-4 bg-yellow-500/5 border border-yellow-500/20 hover:bg-yellow-500/10 transition-all">
+                    <div className="flex items-start space-x-4">
+                      <div className="text-2xl">{contract.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-white font-mono text-sm">{contract.name}</div>
+                        <div className="text-xs text-gray-400 font-mono mt-1">{contract.description}</div>
+                        <div className="flex items-center space-x-2 mt-2">
+                          <div className="text-xs font-mono text-gray-400 px-2 py-1 bg-gray-700/50 flex-1 break-all">
+                            {contract.address}
+                          </div>
+                          <button
+                            onClick={() => copyToClipboard(contract.address, contract.name)}
+                            className="p-1 hover:bg-yellow-500/10 rounded transition-colors flex-shrink-0"
+                            title="Copy Address"
+                          >
+                            <Copy className={`w-3.5 h-3.5 transition-colors ${
+                              copiedAddress === contract.name ? 'text-green-400' : 'text-gray-500 hover:text-yellow-400'
+                            }`} />
+                          </button>
+                          <button
+                            onClick={() => openInExplorer(contract.address)}
+                            className="p-1 hover:bg-yellow-500/10 rounded transition-colors flex-shrink-0"
+                            title="View on Explorer"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-gray-500 hover:text-yellow-400" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Storage Contracts (Eternal) */}
           <div className="bg-gray-800/50 rounded-lg p-6 mb-6">
