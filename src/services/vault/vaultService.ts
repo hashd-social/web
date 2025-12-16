@@ -52,6 +52,20 @@ Nonce: {nonce}`;
 // Default vault URL (used if settings not available)
 const DEFAULT_VAULT_URL = process.env.REACT_APP_VAULT_API_URL || 'http://localhost:3004';
 
+// Content type mapping from AuthorizationType to vault content types
+type VaultContentType = 'messages' | 'posts' | 'media' | 'listings';
+
+const authTypeToContentType = (authType: AuthorizationType): VaultContentType => {
+  switch (authType) {
+    case 'message': return 'messages';
+    case 'group_post':
+    case 'group_comment': return 'posts';
+    case 'media': return 'media';
+    case 'listing': return 'listings';
+    default: return 'posts';
+  }
+};
+
 // Import settings store helpers (lazy to avoid circular deps)
 const getVaultSettings = (): { primaryNode: string; strategy: 'auto' | 'primary' | 'all' } => {
   try {
@@ -62,6 +76,16 @@ const getVaultSettings = (): { primaryNode: string; strategy: 'auto' | 'primary'
     };
   } catch {
     return { primaryNode: DEFAULT_VAULT_URL, strategy: 'auto' };
+  }
+};
+
+// Get preferred node for a specific content type
+const getPreferredNodeForContentType = (contentType: VaultContentType): string => {
+  try {
+    const { getNodeForContentType } = require('../../store/settingsStore');
+    return getNodeForContentType(contentType) || DEFAULT_VAULT_URL;
+  } catch {
+    return DEFAULT_VAULT_URL;
   }
 };
 
@@ -89,31 +113,47 @@ class VaultService {
 
   /**
    * Get all available node URLs for racing
-   * Returns primary node + registry nodes
+   * Returns preferred node for content type first, then other nodes
+   * @param contentType - Optional content type to prioritize specific node
    */
-  private async getAvailableNodeUrls(): Promise<string[]> {
+  private async getAvailableNodeUrls(contentType?: VaultContentType): Promise<string[]> {
     const settings = getVaultSettings();
-    const urls = new Set<string>();
+    const urls: string[] = [];
+    const urlSet = new Set<string>();
     
-    // Always include primary node
-    urls.add(settings.primaryNode);
+    // If content type specified, add preferred node first
+    if (contentType) {
+      const preferredNode = getPreferredNodeForContentType(contentType);
+      if (preferredNode && !urlSet.has(preferredNode)) {
+        urls.push(preferredNode);
+        urlSet.add(preferredNode);
+      }
+    }
+    
+    // Add primary node
+    if (!urlSet.has(settings.primaryNode)) {
+      urls.push(settings.primaryNode);
+      urlSet.add(settings.primaryNode);
+    }
     
     // Add registry nodes if strategy is auto or all
     if (settings.strategy !== 'primary') {
       const registryNodes = await getNodesFromRegistry();
       for (const node of registryNodes) {
-        if (node.active) {
-          urls.add(node.url);
+        if (node.active && !urlSet.has(node.url)) {
+          urls.push(node.url);
+          urlSet.add(node.url);
         }
       }
     }
     
     // Also add default if different
-    if (DEFAULT_VAULT_URL !== settings.primaryNode) {
-      urls.add(DEFAULT_VAULT_URL);
+    if (!urlSet.has(DEFAULT_VAULT_URL)) {
+      urls.push(DEFAULT_VAULT_URL);
+      urlSet.add(DEFAULT_VAULT_URL);
     }
     
-    return Array.from(urls);
+    return urls;
   }
 
   /**
@@ -166,7 +206,13 @@ class VaultService {
           
           // If all nodes failed, reject with combined error
           if (errorCount === nodeUrls.length && !resolved) {
-            reject(new Error(`All nodes failed: ${errors.map(e => e.message).join(', ')}`));
+            // Check if all errors are 404s - this is expected for new content
+            const all404 = errors.every(e => e.message.includes('404'));
+            if (all404) {
+              reject(new Error('BLOB_NOT_FOUND'));
+            } else {
+              reject(new Error(`All nodes failed: ${errors.map(e => e.message).join(', ')}`));
+            }
           }
         }
       });
@@ -402,34 +448,70 @@ class VaultService {
       authorization,
     };
 
-    // Upload to vault
-    const response = await fetch(`${this.getVaultUrl()}/store`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `Vault upload failed: ${response.status}`;
+    // Get content type for node selection
+    const contentType = authTypeToContentType(type);
+    
+    // Get nodes ordered by preference for this content type
+    const nodeUrls = await this.getAvailableNodeUrls(contentType);
+    
+    // Try each node in order until one succeeds
+    let lastError: Error | null = null;
+    for (const nodeUrl of nodeUrls) {
       try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.message || errorJson.error || errorMessage;
-      } catch {
-        errorMessage = errorText || errorMessage;
-      }
-      throw new Error(errorMessage);
-    }
+        console.log(`📤 Trying to store ${contentType} on ${nodeUrl}...`);
+        const response = await fetch(`${nodeUrl}/store`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(30000) // 30 second timeout
+        });
 
-    const result = await response.json();
-    return {
-      success: true,
-      cid: result.cid,
-      timestamp: result.timestamp || Date.now(),
-      replicationStatus: result.replicationStatus,
-    };
+        if (response.ok) {
+          const result = await response.json();
+          console.log(`✅ Stored ${contentType} on ${nodeUrl}`);
+          return result as StoreResponse;
+        }
+        
+        // Check if it's a content type rejection (try next node)
+        const errorText = await response.text();
+        let errorMessage = `Vault upload failed: ${response.status}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorJson.error || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        
+        // If node doesn't accept this content type, try next node
+        if (errorMessage.includes('does not accept') || response.status === 403) {
+          console.log(`⏭️ Node ${nodeUrl} doesn't accept ${contentType}, trying next...`);
+          lastError = new Error(errorMessage);
+          continue;
+        }
+        
+        // Other errors - throw immediately
+        throw new Error(errorMessage);
+      } catch (error: any) {
+        // Network errors or timeouts - try next node
+        if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+          console.log(`⏭️ Node ${nodeUrl} timed out, trying next...`);
+          lastError = error;
+          continue;
+        }
+        // Content type rejection - try next node
+        if (error.message?.includes('does not accept')) {
+          console.log(`⏭️ Node ${nodeUrl} doesn't accept ${contentType}, trying next...`);
+          lastError = error;
+          continue;
+        }
+        throw error;
+      }
+    }
+    
+    // All nodes failed
+    throw lastError || new Error(`No nodes available for ${contentType} content`);
   }
 
   /**

@@ -152,8 +152,12 @@ export class IPFSService {
         console.log('Thread has no CID on contract yet');
         return null;
       }
-    } catch (contractError) {
-      console.error('Contract fetch failed:', contractError);
+    } catch (contractError: any) {
+      // 404 is expected for new threads - don't log as error
+      const is404 = contractError?.message?.includes('404') || contractError?.message?.includes('Not Found');
+      if (!is404) {
+        console.error('Contract fetch failed:', contractError);
+      }
       return null;
     }
   }
@@ -182,8 +186,12 @@ export class IPFSService {
         const data = await this.getThreadByCID(cid);
         return { data, cid };
       }
-    } catch (err) {
-      console.error('Contract fetch failed:', err);
+    } catch (err: any) {
+      // 404 is expected for new threads - don't log as error
+      const is404 = err?.message?.includes('404') || err?.message?.includes('Not Found');
+      if (!is404) {
+        console.error('Contract fetch failed:', err);
+      }
     }
     
     return null;

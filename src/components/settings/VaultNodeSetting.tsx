@@ -6,8 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Database, Check, RefreshCw, Wifi, WifiOff, Zap, AlertCircle } from 'lucide-react';
-import { useSettingsStore, VaultFallbackStrategy } from '../../store/settingsStore';
+import { Database, Check, RefreshCw, Wifi, WifiOff, Zap, AlertCircle, MessageSquare, FileText, Image, ShoppingBag, Settings2 } from 'lucide-react';
+import { useSettingsStore, VaultFallbackStrategy, ContentType, ContentTypeNodePreferences } from '../../store/settingsStore';
 import { getVaultNodesFromRegistry } from '../../utils/contracts';
 
 interface VaultNode {
@@ -16,14 +16,30 @@ interface VaultNode {
   active: boolean;
   healthy?: boolean;
   latency?: number;
+  contentTypes?: string[] | 'all';
+  allowedGuilds?: string[] | 'all';
+  blockedGuilds?: string[];
 }
+
+// Content type configuration
+const CONTENT_TYPES: { type: ContentType; label: string; icon: typeof MessageSquare; color: string }[] = [
+  { type: 'messages', label: 'Messages', icon: MessageSquare, color: 'blue' },
+  { type: 'posts', label: 'Posts', icon: FileText, color: 'green' },
+  { type: 'media', label: 'Media', icon: Image, color: 'purple' },
+  { type: 'listings', label: 'Listings', icon: ShoppingBag, color: 'yellow' }
+];
 
 export const VaultNodeSetting: React.FC = () => {
   const { 
     vaultPrimaryNode, 
     vaultFallbackStrategy, 
+    contentTypeNodes,
+    contentTypeOverrides,
     setVaultPrimaryNode, 
-    setVaultFallbackStrategy 
+    setVaultFallbackStrategy,
+    setContentTypeNodes,
+    setContentTypeOverride,
+    clearContentTypeOverride
   } = useSettingsStore();
   
   const [registryNodes, setRegistryNodes] = useState<VaultNode[]>([]);
@@ -33,8 +49,65 @@ export const VaultNodeSetting: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [customUrl, setCustomUrl] = useState(vaultPrimaryNode);
   const [healthyCount, setHealthyCount] = useState(0);
+  const [showOverrides, setShowOverrides] = useState(false);
 
-  const checkNodeHealth = async (url: string): Promise<{ healthy: boolean; latency: number }> => {
+  // Auto-assign nodes for each content type based on their capabilities
+  const autoAssignNodes = useCallback((nodes: VaultNode[]) => {
+    const healthyNodes = nodes.filter(n => n.healthy);
+    if (healthyNodes.length === 0) return;
+
+    const assignments: ContentTypeNodePreferences = {
+      messages: null,
+      posts: null,
+      media: null,
+      listings: null
+    };
+
+    // First pass: assign specialist nodes (nodes that only serve specific content types)
+    for (const contentType of ['messages', 'posts', 'media', 'listings'] as ContentType[]) {
+      // Find nodes that support this content type
+      const supportingNodes = healthyNodes.filter(n => {
+        if (n.contentTypes === 'all') return true;
+        if (Array.isArray(n.contentTypes)) return n.contentTypes.includes(contentType);
+        return false;
+      });
+
+      // Prefer specialist nodes (fewer content types = more specialized)
+      const specialists = supportingNodes.filter(n => {
+        if (n.contentTypes === 'all') return false;
+        if (Array.isArray(n.contentTypes)) return n.contentTypes.length <= 2;
+        return false;
+      });
+
+      if (specialists.length > 0) {
+        // Pick fastest specialist
+        assignments[contentType] = specialists[0].url;
+      } else if (supportingNodes.length > 0) {
+        // Fall back to any supporting node (fastest)
+        assignments[contentType] = supportingNodes[0].url;
+      }
+    }
+
+    // Second pass: fill any gaps with generalist nodes
+    const generalists = healthyNodes.filter(n => n.contentTypes === 'all');
+    for (const contentType of ['messages', 'posts', 'media', 'listings'] as ContentType[]) {
+      if (!assignments[contentType] && generalists.length > 0) {
+        assignments[contentType] = generalists[0].url;
+      }
+    }
+
+    // Update store with auto-assignments
+    setContentTypeNodes(assignments);
+    console.log('🔄 Auto-assigned content type nodes:', assignments);
+  }, [setContentTypeNodes]);
+
+  const checkNodeHealth = async (url: string): Promise<{ 
+    healthy: boolean; 
+    latency: number;
+    contentTypes?: string[] | 'all';
+    allowedGuilds?: string[] | 'all';
+    blockedGuilds?: string[];
+  }> => {
     const start = Date.now();
     try {
       const response = await fetch(`${url}/health`, { 
@@ -42,7 +115,32 @@ export const VaultNodeSetting: React.FC = () => {
         signal: AbortSignal.timeout(5000)
       });
       const latency = Date.now() - start;
-      return { healthy: response.ok, latency };
+      
+      if (!response.ok) {
+        return { healthy: false, latency: 9999 };
+      }
+
+      // Try to fetch node info for content types
+      try {
+        const infoResponse = await fetch(`${url}/node/info`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000)
+        });
+        if (infoResponse.ok) {
+          const info = await infoResponse.json();
+          return { 
+            healthy: true, 
+            latency,
+            contentTypes: info.contentTypes,
+            allowedGuilds: info.allowedGuilds,
+            blockedGuilds: info.blockedGuilds
+          };
+        }
+      } catch {
+        // Node info not available, just return health
+      }
+
+      return { healthy: true, latency };
     } catch {
       return { healthy: false, latency: 9999 };
     }
@@ -75,7 +173,14 @@ export const VaultNodeSetting: React.FC = () => {
       const nodesWithHealth = await Promise.all(
         nodes.map(async (node) => {
           const health = await checkNodeHealth(node.url);
-          return { ...node, healthy: health.healthy, latency: health.latency };
+          return { 
+            ...node, 
+            healthy: health.healthy, 
+            latency: health.latency,
+            contentTypes: health.contentTypes,
+            allowedGuilds: health.allowedGuilds,
+            blockedGuilds: health.blockedGuilds
+          };
         })
       );
       
@@ -84,6 +189,9 @@ export const VaultNodeSetting: React.FC = () => {
       
       setRegistryNodes(nodesWithHealth);
       setHealthyCount(nodesWithHealth.filter(n => n.healthy).length);
+      
+      // Auto-assign nodes for each content type
+      autoAssignNodes(nodesWithHealth);
     } catch (error) {
       console.warn('Failed to fetch nodes from registry:', error);
       // Fallback to default node
@@ -161,91 +269,21 @@ export const VaultNodeSetting: React.FC = () => {
         <div className="flex items-center gap-2 mb-2">
           <Database className="w-5 h-5 text-cyan-400" />
           <h3 className="text-lg font-bold neon-text-cyan uppercase tracking-wider font-mono">
-            Vault Nodes
+            ByteCave Nodes
           </h3>
         </div>
         <p className="text-sm text-gray-400">
-          Configure which vault nodes to use for storing and retrieving your encrypted data.
+         Click a node to set it as the default fallback when no specialist node is available.
         </p>
       </div>
 
-      {/* Primary Node Selection */}
       <div className="space-y-4">
+        {/* Available Nodes from Registry - FIRST */}
         <div>
-          <label className="block text-xs font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-            Primary Node
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={customUrl}
-              onChange={(e) => setCustomUrl(e.target.value)}
-              placeholder="http://localhost:3004"
-              className="flex-1 px-4 py-3 bg-gray-900/50 rounded-lg text-white font-mono text-sm focus:border-cyan-500 focus:outline-none transition-colors"
-            />
-            <button
-              onClick={handleTestConnection}
-              disabled={testing}
-              className="px-4 py-3 bg-gray-700/50 hover:bg-gray-600/50 border border-gray-600 hover:border-cyan-500/50 text-gray-300 hover:text-cyan-400 rounded-lg transition-all font-mono text-sm flex items-center gap-2"
-            >
-              {testing && <RefreshCw className="w-4 h-4 animate-spin" />}
-              {testResult === 'success' && <Check className="w-4 h-4 text-green-400" />}
-              {testResult === 'error' && <WifiOff className="w-4 h-4 text-red-400" />}
-              {!testing && !testResult && <Wifi className="w-4 h-4" />}
-              TEST
-            </button>
-            <button
-              onClick={handleSave}
-              className={`px-6 py-3 rounded-lg font-bold uppercase tracking-wider transition-all font-mono text-sm ${
-                saved
-                  ? 'bg-green-500/20 text-green-400 border border-green-500/50'
-                  : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/30'
-              }`}
-            >
-              {saved ? <Check className="w-5 h-5" /> : 'SAVE'}
-            </button>
-          </div>
-        </div>
-
-        {/* Fallback Strategy */}
-        <div>
-          <label className="block text-xs font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-            Fallback Strategy
-          </label>
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: 'auto', label: 'Auto (Fastest)', icon: Zap, desc: 'Use fastest responding node' },
-              { value: 'primary', label: 'Primary Only', icon: Database, desc: 'Only use selected node' },
-              { value: 'all', label: 'All Nodes', icon: RefreshCw, desc: 'Query all, verify consistency' }
-            ].map((option) => (
-              <button
-                key={option.value}
-                onClick={() => handleStrategyChange(option.value as VaultFallbackStrategy)}
-                className={`px-4 py-2 rounded-lg font-mono text-sm transition-all flex items-center gap-2 ${
-                  vaultFallbackStrategy === option.value
-                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                    : 'bg-gray-700/50 text-gray-400 border border-gray-600 hover:border-cyan-500/30 hover:text-cyan-400'
-                }`}
-                title={option.desc}
-              >
-                <option.icon className="w-4 h-4" />
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-2 font-mono">
-            {vaultFallbackStrategy === 'auto' && '✓ Automatically selects the fastest responding node'}
-            {vaultFallbackStrategy === 'primary' && '🔒 Only uses your selected primary node'}
-            {vaultFallbackStrategy === 'all' && '🔍 Queries all nodes and verifies data consistency'}
-          </p>
-        </div>
-
-        {/* Available Nodes from Registry */}
-        <div className="pt-4 border-t border-cyan-500/10">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold neon-text-cyan uppercase tracking-wider font-mono">
-              Available Nodes
-            </p>
+            <label className="block text-xs font-bold neon-text-cyan uppercase tracking-wider font-mono">
+              Network Nodes ({healthyCount}/{registryNodes.length} online)
+            </label>
             <button
               onClick={fetchNodesFromRegistry}
               disabled={loading}
@@ -267,39 +305,192 @@ export const VaultNodeSetting: React.FC = () => {
             </div>
           )}
           
-          <div className="flex flex-wrap gap-2">
-            {registryNodes.map((node) => (
-              <button
-                key={node.nodeId}
-                onClick={() => handleSelectNode(node.url)}
-                className={`px-3 py-1.5 rounded text-xs font-mono transition-all flex items-center gap-2 ${
-                  vaultPrimaryNode === node.url
-                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                    : 'bg-gray-700/50 hover:bg-cyan-500/20 border border-gray-600 hover:border-cyan-500/50 text-gray-400 hover:text-cyan-400'
-                }`}
-                title={`Latency: ${node.latency ? node.latency + 'ms' : 'unknown'}`}
-              >
-                {node.healthy ? (
-                  <Wifi className="w-3 h-3 text-green-400" />
-                ) : (
-                  <WifiOff className="w-3 h-3 text-red-400" />
-                )}
-                <span>{node.url.replace(/^https?:\/\//, '')}</span>
-                {node.latency && node.latency < 9999 && (
-                  <span className="text-gray-500">{node.latency}ms</span>
-                )}
-              </button>
-            ))}
+          {(() => {
+            // Filter to only show nodes that accept all content types
+            const generalistNodes = registryNodes.filter(n => n.contentTypes === 'all');
+            const onlySpecialists = registryNodes.length > 0 && generalistNodes.length === 0;
+            
+            if (onlySpecialists) {
+              return (
+                <div className="flex items-center gap-2 text-xs text-yellow-400 font-mono bg-yellow-500/10 rounded-lg px-3 py-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>Only specialist nodes available. Some features may be limited until a full-service node joins the network.</span>
+                </div>
+              );
+            }
+            
+            return (
+              <div className="space-y-2">
+                {generalistNodes.map((node) => {
+                  const isDefaultFallback = vaultPrimaryNode === node.url;
+                  
+                  return (
+                    <button
+                      key={node.nodeId}
+                      onClick={() => handleSelectNode(node.url)}
+                      className={`w-full rounded-lg text-left transition-all ${
+                        isDefaultFallback
+                          ? 'bg-cyan-500/20 border border-cyan-500/50'
+                          : 'bg-gray-700/30 hover:bg-cyan-500/10 border border-gray-600 hover:border-cyan-500/30'
+                      }`}
+                    >
+                      <div className="px-3 py-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {node.healthy ? (
+                            <Wifi className="w-3 h-3 text-green-400" />
+                          ) : (
+                            <WifiOff className="w-3 h-3 text-red-400" />
+                          )}
+                          <span className={`font-mono text-sm ${isDefaultFallback ? 'text-cyan-400' : 'text-gray-300'}`}>
+                            {node.url.replace(/^https?:\/\//, '')}
+                          </span>
+                          <span className="text-xs text-cyan-400 font-mono">ALL CONTENT</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {node.latency && node.latency < 9999 && (
+                            <span className="text-xs text-gray-500 font-mono">{node.latency}ms</span>
+                          )}
+                          {isDefaultFallback && (
+                            <span className="text-xs text-cyan-400 bg-cyan-500/20 px-1.5 py-0.5 rounded font-mono">DEFAULT</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+        </div>
+
+        {/* Content Type Routing - SECOND */}
+        <div className="pt-4 border-t border-cyan-500/10">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-bold neon-text-cyan uppercase tracking-wider font-mono">
+              Content Type Routing
+            </p>
+            <button
+              onClick={() => setShowOverrides(!showOverrides)}
+              className="text-xs text-gray-400 hover:text-cyan-400 font-mono flex items-center gap-1"
+            >
+              <Settings2 className="w-3 h-3" />
+              {showOverrides ? 'Hide Overrides' : 'Show Overrides'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            Nodes are auto-assigned based on their capabilities. Specialist nodes are preferred.
+          </p>
+          
+          <div className="space-y-2">
+            {CONTENT_TYPES.map(({ type, label, icon: Icon, color }) => {
+              const autoNode = contentTypeNodes[type];
+              const override = contentTypeOverrides[type];
+              const effectiveNode = override || autoNode || vaultPrimaryNode;
+              const isOverridden = !!override;
+              
+              // Find nodes that support this content type for the dropdown
+              const supportingNodes = registryNodes.filter(n => {
+                if (!n.healthy) return false;
+                if (n.contentTypes === 'all') return true;
+                if (Array.isArray(n.contentTypes)) return n.contentTypes.includes(type);
+                return false;
+              });
+              
+              return (
+                <div key={type} className="flex items-center gap-3 bg-gray-900/30 rounded-lg px-3 py-2">
+                  <div className={`flex items-center gap-2 w-24 text-${color}-400`}>
+                    <Icon className="w-4 h-4" />
+                    <span className="text-xs font-mono uppercase">{label}</span>
+                  </div>
+                  
+                  {showOverrides ? (
+                    <div className="flex-1 flex items-center gap-2">
+                      <select
+                        value={override || ''}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setContentTypeOverride(type, e.target.value);
+                          } else {
+                            clearContentTypeOverride(type);
+                          }
+                          setSaved(true);
+                          setTimeout(() => setSaved(false), 2000);
+                        }}
+                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs font-mono text-gray-300 focus:border-cyan-500 focus:outline-none"
+                      >
+                        <option value="">Auto ({autoNode ? autoNode.replace(/^https?:\/\//, '') : 'none'})</option>
+                        {supportingNodes.map(node => (
+                          <option key={node.nodeId} value={node.url}>
+                            {node.url.replace(/^https?:\/\//, '')}
+                          </option>
+                        ))}
+                      </select>
+                      {isOverridden && (
+                        <button
+                          onClick={() => {
+                            clearContentTypeOverride(type);
+                            setSaved(true);
+                            setTimeout(() => setSaved(false), 2000);
+                          }}
+                          className="text-xs text-gray-500 hover:text-red-400"
+                          title="Clear override"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center gap-2">
+                      <span className={`text-xs font-mono ${isOverridden ? 'text-cyan-400' : 'text-gray-400'}`}>
+                        {effectiveNode.replace(/^https?:\/\//, '')}
+                      </span>
+                      {isOverridden && (
+                        <span className="text-xs text-cyan-500 bg-cyan-500/10 px-1.5 py-0.5 rounded">override</span>
+                      )}
+                      {!autoNode && !override && (
+                        <span className="text-xs text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded">default fallback</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Network Status */}
+        {/* Retrieval Strategy - THIRD */}
         <div className="pt-4 border-t border-cyan-500/10">
-          <p className="text-xs text-gray-400 font-mono">
-            <strong className="neon-text-cyan">CURRENT:</strong> {vaultPrimaryNode}
+          <label className="block text-xs font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
+            Retrieval Mode
+          </label>
+          <p className="text-xs text-gray-500 mb-2">
+            How to fetch data when reading from the network. Data integrity is always verified via CID.
           </p>
-          <p className="text-xs text-gray-400 font-mono mt-1">
-            <strong className="neon-text-cyan">NETWORK:</strong> {healthyCount}/{registryNodes.length} nodes healthy
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { value: 'auto', label: 'Race All', icon: Zap, desc: 'Query all nodes simultaneously, use fastest response' },
+              { value: 'primary', label: 'Routed Only', icon: Database, desc: 'Only query the assigned node for each content type' }
+            ].map((option) => (
+              <button
+                key={option.value}
+                onClick={() => handleStrategyChange(option.value as VaultFallbackStrategy)}
+                className={`px-4 py-2 rounded-lg font-mono text-sm transition-all flex items-center gap-2 ${
+                  vaultFallbackStrategy === option.value
+                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                    : 'bg-gray-700/50 text-gray-400 border border-gray-600 hover:border-cyan-500/30 hover:text-cyan-400'
+                }`}
+                title={option.desc}
+              >
+                <option.icon className="w-4 h-4" />
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2 font-mono">
+            {vaultFallbackStrategy === 'auto' && '⚡ Queries all nodes at once, uses whichever responds fastest'}
+            {vaultFallbackStrategy === 'primary' && '🎯 Only queries the specific node assigned for each content type'}
+            {vaultFallbackStrategy === 'all' && '⚡ Queries all nodes at once, uses whichever responds fastest'}
           </p>
         </div>
       </div>
