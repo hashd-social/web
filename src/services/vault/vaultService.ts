@@ -8,7 +8,7 @@
 import { ethers } from 'ethers';
 
 // Types
-export type AuthorizationType = 'group_post' | 'group_comment' | 'message' | 'token_distribution';
+export type AuthorizationType = 'group_post' | 'group_comment' | 'message' | 'media' | 'listing';
 
 export interface StorageAuthorization {
   type: AuthorizationType;
@@ -292,7 +292,8 @@ class VaultService {
     options: {
       groupPostsAddress?: string;
       threadId?: string;
-      tokenAddress?: string;
+      mediaId?: string;
+      listingId?: string;
     }
   ): string {
     switch (type) {
@@ -301,8 +302,10 @@ class VaultService {
         return options.groupPostsAddress || '';
       case 'message':
         return options.threadId || '';
-      case 'token_distribution':
-        return options.tokenAddress || '';
+      case 'media':
+        return options.mediaId || '';
+      case 'listing':
+        return options.listingId || '';
       default:
         return '';
     }
@@ -382,7 +385,8 @@ class VaultService {
       postId?: number;
       threadId?: string;
       participants?: string[];
-      tokenAddress?: string;
+      mediaId?: string;
+      listingId?: string;
     }
   ): Promise<StoreResponse> {
     // Create authorization
@@ -472,14 +476,27 @@ class VaultService {
   }
 
   /**
-   * Upload token distribution data to vault
+   * Upload media to vault (images, profile pics, etc.)
    */
-  async uploadTokenDistribution(
+  async uploadMedia(
     data: Uint8Array,
-    tokenAddress: string
+    mediaId: string
   ): Promise<string> {
-    const result = await this.uploadToVault(data, 'token_distribution', {
-      tokenAddress,
+    const result = await this.uploadToVault(data, 'media', {
+      mediaId,
+    });
+    return result.cid;
+  }
+
+  /**
+   * Upload marketplace listing to vault
+   */
+  async uploadListing(
+    data: Uint8Array,
+    listingId: string
+  ): Promise<string> {
+    const result = await this.uploadToVault(data, 'listing', {
+      listingId,
     });
     return result.cid;
   }
