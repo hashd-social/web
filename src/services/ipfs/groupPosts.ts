@@ -1,17 +1,16 @@
 import { ethers } from 'ethers';
-import { getIPFSGateway } from '../../store/settingsStore';
+import { getVaultPrimaryNode } from '../../store/settingsStore';
+import { vaultService } from '../vault';
 
 /**
- * IPFS Service for Filebase
+ * IPFS Service for Group Posts
  * Handles encryption, upload, download, and decryption of group post content
+ * 
+ * Storage: Uses vault nodes with on-chain authorization verification
  */
 
-// Relayer backend for IPFS uploads (uses Filebase S3)
-const RELAYER_URL = process.env.REACT_APP_RELAYER_URL || 'http://localhost:3001';
-const DEFAULT_IPFS_GATEWAY = process.env.REACT_APP_IPFS_GATEWAY || 'https://3oh.myfilebase.com/ipfs';
-
-// Helper to get current gateway (from settings or default)
-const getGateway = () => getIPFSGateway() || DEFAULT_IPFS_GATEWAY;
+// Helper to get current vault node URL
+const getVaultUrl = () => getVaultPrimaryNode();
 
 export interface PostContent {
   title: string;
@@ -101,103 +100,35 @@ export async function decryptContent(
 }
 
 /**
- * Upload encrypted content to IPFS
- * Uses user's Pinata credentials if available, otherwise falls back to relayer
+ * Upload encrypted content to vault
+ * Uses vault nodes with on-chain authorization verification
  */
 export async function uploadToIPFS(
   encryptedData: Uint8Array,
   userAddress: string,
   groupPostsAddress: string
 ): Promise<string> {
-  // Check for user Pinata credentials
-  const { useSettingsStore } = await import('../../store/settingsStore');
-  const ipfsCredentials = useSettingsStore.getState().ipfsCredentials;
-  console.log('🔍 IPFS Credentials from store:', ipfsCredentials);
-  
-  // If user has Pinata configured, try that first
-  if (ipfsCredentials && ipfsCredentials.provider === 'pinata') {
-    try {
-      console.log('📤 Uploading with user Pinata credentials...');
-      const { ipfsUploadService } = await import('./userCredentials');
-      const result = await ipfsUploadService.upload(encryptedData, ipfsCredentials);
-      console.log(`✅ Uploaded via Pinata:`, result.cid);
-      return result.cid;
-    } catch (pinataError) {
-      console.warn('Pinata upload failed, falling back to relayer:', pinataError);
-    }
-  }
-  
-  // Use relayer (either as fallback or primary method)
-  console.log('📤 Uploading via relayer...');
+  console.log('📤 Uploading to vault...');
   try {
-    
-    // Compute content hash
-    const contentHash = ethers.keccak256(encryptedData);
-    
-    // Get signer to sign message
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    const signer = await provider.getSigner();
-    
-    // Create signature payload
-    const timestamp = Date.now();
-    const nonce = Math.random().toString(36).substring(7);
-    const message = `Upload to ${groupPostsAddress}\nHash: ${contentHash}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
-    const signature = await signer.signMessage(message);
-    
-    // Create FormData with the encrypted content
-    const formData = new FormData();
-    const arrayBuffer = encryptedData.buffer.slice(encryptedData.byteOffset, encryptedData.byteOffset + encryptedData.byteLength) as ArrayBuffer;
-    const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
-    formData.append('file', blob, 'encrypted-content');
-    formData.append('userAddress', userAddress);
-    formData.append('groupPostsAddress', groupPostsAddress);
-    formData.append('signature', signature);
-    formData.append('timestamp', timestamp.toString());
-    formData.append('nonce', nonce);
-    formData.append('contentHash', contentHash);
-    
-    // Upload to relayer
-    const response = await fetch(`${RELAYER_URL}/api/upload`, {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`IPFS upload failed: ${response.statusText} - ${errorText}`);
-    }
-    
-    const result = await response.json();
-    
-    // Return CID from relayer
-    return result.cid;
+    const cid = await vaultService.uploadGroupPost(encryptedData, groupPostsAddress);
+    console.log(`✅ Uploaded to vault: ${cid}`);
+    return cid;
   } catch (error) {
-    console.error('Relayer upload error:', error);
+    console.error('Vault upload error:', error);
     throw error;
   }
 }
 
 /**
- * Download content from IPFS via Filebase
+ * Download content from vault
  */
 export async function downloadFromIPFS(cid: string): Promise<Uint8Array> {
   try {
-    const url = `${getGateway()}/${cid}`;
-    console.log('📥 Downloading from IPFS:', url);
-    
-    // Use your Filebase gateway (faster and more reliable)
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`IPFS download failed: ${response.statusText} - ${errorText}`);
-    }
-    
-    // Get binary data directly from response
-    const arrayBuffer = await response.arrayBuffer();
-    return new Uint8Array(arrayBuffer);
+    console.log('📥 Downloading from vault:', cid);
+    const data = await vaultService.getBlobWithFallback(cid);
+    return data;
   } catch (error) {
-    console.error('IPFS download error:', error);
+    console.error('Vault download error:', error);
     throw error;
   }
 }
@@ -342,12 +273,12 @@ export function deriveGroupKey(groupTokenAddress: string, accessLevel: AccessLev
  * Get IPFS gateway URL for viewing content
  */
 export function getIPFSGatewayUrl(cid: string): string {
-  return `${getGateway()}/${cid}`;
+  return `${getVaultUrl()}/blob/${cid}`;
 }
 
 /**
- * Upload token distribution data to IPFS
- * Stores CSV and merkle data in a 'tokens/{tokenAddress}' folder
+ * Upload token distribution data to vault
+ * Stores JSON and CSV data for token airdrops
  */
 export async function uploadTokenDistribution(
   tokenAddress: string,
@@ -364,90 +295,31 @@ export async function uploadTokenDistribution(
   userAddress: string
 ): Promise<{ jsonCid: string; csvCid: string }> {
   try {
-    // Get signer to sign message
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    const signer = await provider.getSigner();
-    
-    // Create JSON file
+    // Create JSON data
     const jsonData = JSON.stringify(distributionData, null, 2);
-    const jsonBlob = new Blob([jsonData], { type: 'application/json' });
+    const jsonBytes = new TextEncoder().encode(jsonData);
     
-    // Create CSV file
+    // Create CSV data
     const csvHeader = 'Address,Amount,Proof\n';
     const csvRows = distributionData.recipients.map(r => 
       `${r.address},${r.amount},"${r.proof.join(',')}"`
     ).join('\n');
     const csvData = csvHeader + csvRows;
-    const csvBlob = new Blob([csvData], { type: 'text/csv' });
+    const csvBytes = new TextEncoder().encode(csvData);
     
-    // Upload JSON - use same message format as posts
-    const jsonTimestamp = Date.now();
-    const jsonNonce = Math.random().toString(36).substring(7);
-    const jsonHash = ethers.keccak256(new Uint8Array(await jsonBlob.arrayBuffer()));
-    const jsonMessage = `Upload to ${tokenAddress}\nHash: ${jsonHash}\nTimestamp: ${jsonTimestamp}\nNonce: ${jsonNonce}`;
-    const jsonSignature = await signer.signMessage(jsonMessage);
+    // Upload JSON to vault
+    const jsonCid = await vaultService.uploadTokenDistribution(jsonBytes, tokenAddress);
     
-    const jsonFormData = new FormData();
-    jsonFormData.append('file', jsonBlob, `${tokenAddress}_distribution.json`);
-    jsonFormData.append('userAddress', userAddress);
-    jsonFormData.append('groupPostsAddress', tokenAddress); // Use token address as identifier
-    jsonFormData.append('signature', jsonSignature);
-    jsonFormData.append('timestamp', jsonTimestamp.toString());
-    jsonFormData.append('nonce', jsonNonce);
-    jsonFormData.append('contentHash', jsonHash);
-    jsonFormData.append('folder', `tokens/${tokenAddress.toLowerCase()}`);
+    // Upload CSV to vault
+    const csvCid = await vaultService.uploadTokenDistribution(csvBytes, tokenAddress);
     
-    const jsonResponse = await fetch(`${RELAYER_URL}/api/upload`, {
-      method: 'POST',
-      body: jsonFormData
-    });
-    
-    if (!jsonResponse.ok) {
-      const errorText = await jsonResponse.text();
-      throw new Error(`JSON upload failed: ${jsonResponse.statusText} - ${errorText}`);
-    }
-    
-    const jsonResult = await jsonResponse.json();
-    
-    // Upload CSV - use same message format as posts
-    const csvTimestamp = Date.now();
-    const csvNonce = Math.random().toString(36).substring(7);
-    const csvHash = ethers.keccak256(new Uint8Array(await csvBlob.arrayBuffer()));
-    const csvMessage = `Upload to ${tokenAddress}\nHash: ${csvHash}\nTimestamp: ${csvTimestamp}\nNonce: ${csvNonce}`;
-    const csvSignature = await signer.signMessage(csvMessage);
-    
-    const csvFormData = new FormData();
-    csvFormData.append('file', csvBlob, `${tokenAddress}_recipients.csv`);
-    csvFormData.append('userAddress', userAddress);
-    csvFormData.append('groupPostsAddress', tokenAddress);
-    csvFormData.append('signature', csvSignature);
-    csvFormData.append('timestamp', csvTimestamp.toString());
-    csvFormData.append('nonce', csvNonce);
-    csvFormData.append('contentHash', csvHash);
-    csvFormData.append('folder', `tokens/${tokenAddress.toLowerCase()}`);
-    
-    const csvResponse = await fetch(`${RELAYER_URL}/api/upload`, {
-      method: 'POST',
-      body: csvFormData
-    });
-    
-    if (!csvResponse.ok) {
-      const errorText = await csvResponse.text();
-      throw new Error(`CSV upload failed: ${csvResponse.statusText} - ${errorText}`);
-    }
-    
-    const csvResult = await csvResponse.json();
-    
-    console.log('✅ Token distribution uploaded to IPFS:', {
+    console.log('✅ Token distribution uploaded to vault:', {
       tokenAddress,
-      jsonCid: jsonResult.cid,
-      csvCid: csvResult.cid
+      jsonCid,
+      csvCid
     });
     
-    return {
-      jsonCid: jsonResult.cid,
-      csvCid: csvResult.cid
-    };
+    return { jsonCid, csvCid };
   } catch (error) {
     console.error('Token distribution upload error:', error);
     throw error;

@@ -8,6 +8,5 @@ export { SessionManager } from './SessionManager';
 export { SessionPersistenceToggle } from './SessionPersistenceToggle';
 export { PasskeyProtection } from './PasskeyProtection';
 export { RpcEndpointSetting } from './RpcEndpointSetting';
-export { IpfsGatewaySetting } from './IpfsGatewaySetting';
-export { IpfsUploadSetting } from './IpfsUploadSetting';
+export { VaultNodeSetting } from './VaultNodeSetting';
 export { DataManagement } from './DataManagement';

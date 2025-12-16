@@ -1,9 +1,6 @@
-import axios from 'axios';
-import { getIPFSGateway } from '../../store/settingsStore';
+import { getVaultPrimaryNode } from '../../store/settingsStore';
 import { contractService, bytes32ToCid } from '../../utils/contracts';
-
-const RELAYER_URL = process.env.REACT_APP_RELAYER_URL || 'http://localhost:3001';
-const DEFAULT_IPFS_GATEWAY = process.env.REACT_APP_IPFS_GATEWAY || 'https://3oh.myfilebase.com/ipfs';
+import { vaultService } from '../vault';
 
 interface Message {
   messageId: number;
@@ -40,181 +37,170 @@ interface UserMessageFile {
 }
 
 export class IPFSService {
+  /**
+   * Initialize user - no longer needed with vault (user just starts sending)
+   * Kept for backwards compatibility
+   */
   async initializeUser(userAddress: string, publicKey: string): Promise<{ ipnsName: string; cid: string }> {
-    const response = await axios.post(`${RELAYER_URL}/api/messages/initialize`, {
-      userAddress,
-      publicKey
-    });
-    return response.data;
+    console.log('initializeUser called - no longer needed with vault storage');
+    return { ipnsName: '', cid: '' };
   }
 
+  /**
+   * Get user messages - fetches from vault by CID
+   */
   async getUserMessages(userAddress: string, cid?: string): Promise<UserMessageFile> {
-    // If CID is provided, fetch directly from IPFS gateway
     if (cid) {
       try {
-        const gateway = getIPFSGateway() || DEFAULT_IPFS_GATEWAY;
-        const response = await axios.get(`${gateway}/${cid}`, { timeout: 10000 });
-        return response.data;
+        const data = await vaultService.getBlobWithFallback(cid);
+        const decoder = new TextDecoder();
+        return JSON.parse(decoder.decode(data));
       } catch (err) {
-        console.error('Failed to fetch from IPFS gateway:', err);
+        console.error('Failed to fetch from vault:', err);
       }
     }
     
-    // Fallback to relayer (for backwards compatibility or if CID not provided)
-    const response = await axios.get(`${RELAYER_URL}/api/messages/user/${userAddress}`);
-    return response.data.data;
+    // Return empty structure if no CID
+    return {
+      owner: userAddress,
+      publicKey: '',
+      currentCID: '',
+      ipnsName: '',
+      lastUpdated: Date.now(),
+      version: 0,
+      messages: []
+    };
   }
 
-  // NEW: Send signed message to shared thread
+  /**
+   * Send signed message to shared thread
+   * Uploads directly to vault and returns CID for on-chain recording
+   */
   async sendSignedMessage(
     signedMessage: any,
-    threadId: string
+    threadId: string,
+    participants: string[]
   ): Promise<{ messageId: string; threadCID: string; messageIndex: number; threadMessageCount: number }> {
-    const response = await axios.post(`${RELAYER_URL}/api/messages/send`, {
-      signedMessage,
-      threadId
-    });
-    return response.data;
+    // Get current thread or create new one
+    let threadData = await this.getThread(threadId);
+    
+    if (!threadData) {
+      threadData = {
+        threadId,
+        participants,
+        messages: [],
+        version: 0,
+        lastUpdated: Date.now()
+      };
+    }
+    
+    // Add message to thread
+    const messageIndex = threadData.messages.length;
+    threadData.messages.push(signedMessage);
+    threadData.version++;
+    threadData.lastUpdated = Date.now();
+    
+    // Encrypt and upload to vault
+    const encoder = new TextEncoder();
+    const threadBytes = encoder.encode(JSON.stringify(threadData));
+    
+    const threadCID = await vaultService.uploadMessage(threadBytes, threadId, participants);
+    
+    // Cache the new CID
+    this.cacheThreadCID(threadId, threadCID);
+    
+    return {
+      messageId: `${threadId}-${messageIndex}`,
+      threadCID,
+      messageIndex,
+      threadMessageCount: threadData.messages.length
+    };
   }
 
-  // Get thread file - tries relayer first, then contract+IPFS gateway fallback
-  // Priority: 1. Relayer (fastest), 2. Cached CID, 3. Contract CID
+  /**
+   * Get thread file - tries vault first, then contract CID fallback
+   */
   async getThread(threadId: string): Promise<any> {
-    // First check if we have a cached CID (allows offline-first)
     const cachedCID = this.getCachedThreadCID(threadId);
     
-    try {
-      const response = await axios.get(`${RELAYER_URL}/api/threads/${threadId}`, { timeout: 10000 });
-      
-      // Cache the CID from response for future fallback
-      if (response.data.cid) {
-        this.cacheThreadCID(threadId, response.data.cid);
-      }
-      
-      return response.data.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        // Thread doesn't exist yet
-        return null;
-      }
-      
-      // Relayer unavailable - try fallbacks
-      console.warn('⚠️ Relayer unavailable, trying fallbacks...');
-      
-      // Fallback 1: Try cached CID
-      if (cachedCID) {
-        console.log(`   Trying cached CID ${cachedCID.slice(0, 12)}...`);
-        try {
-          const data = await this.getThreadByCID(cachedCID);
-          console.log('✅ Loaded thread from IPFS gateway (cached CID)');
-          return data;
-        } catch (ipfsError) {
-          console.warn('   Cached CID fetch failed, trying contract...');
-        }
-      }
-      
-      // Fallback 2: Get CID from contract (decentralized source of truth)
+    // Try cached CID first (fastest)
+    if (cachedCID) {
       try {
-        console.log('   Fetching CID from contract...');
-        console.log('   Thread ID:', threadId);
-        const cidBytes32 = await contractService.getThreadCID(threadId);
-        console.log('   Raw bytes32 from contract:', cidBytes32);
-        
-        if (cidBytes32 && cidBytes32 !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
-          const cid = bytes32ToCid(cidBytes32);
-          console.log(`   Contract CID: ${cid}`);
-          
-          // Cache it for future use
-          this.cacheThreadCID(threadId, cid);
-          
-          const data = await this.getThreadByCID(cid);
-          console.log('✅ Loaded thread from IPFS gateway (contract CID)');
-          return data;
-        } else {
-          console.log('   Thread has no CID on contract yet (returned zero bytes)');
-        }
-      } catch (contractError) {
-        console.error('   Contract fetch failed:', contractError);
-        console.error('   Error details:', contractError instanceof Error ? contractError.message : String(contractError));
+        const data = await this.getThreadByCID(cachedCID);
+        console.log('✅ Loaded thread from vault (cached CID)');
+        return data;
+      } catch (err) {
+        console.warn('Cached CID fetch failed, trying contract...');
       }
-      
-      throw error;
     }
-  }
-
-  // Get thread file with CID - tries relayer first, then contract+IPFS gateway fallback
-  async getThreadWithCID(threadId: string): Promise<{ data: any; cid: string | null } | null> {
+    
+    // Fallback: Get CID from contract
     try {
-      const response = await axios.get(`${RELAYER_URL}/api/threads/${threadId}`, { timeout: 10000 });
-      const cid = response.data.cid || null;
+      console.log('Fetching CID from contract for thread:', threadId);
+      const cidBytes32 = await contractService.getThreadCID(threadId);
       
-      // Cache the CID for fallback use
-      if (cid) {
+      if (cidBytes32 && cidBytes32 !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        const cid = bytes32ToCid(cidBytes32);
+        console.log(`Contract CID: ${cid}`);
+        
         this.cacheThreadCID(threadId, cid);
-      }
-      
-      return {
-        data: response.data.data,
-        cid: cid
-      };
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+        
+        const data = await this.getThreadByCID(cid);
+        console.log('✅ Loaded thread from vault (contract CID)');
+        return data;
+      } else {
+        console.log('Thread has no CID on contract yet');
         return null;
       }
-      
-      // Relayer unavailable - try fallbacks
-      console.warn('⚠️ Relayer unavailable, trying fallbacks...');
-      
-      // Fallback 1: Try cached CID
-      const cachedCID = this.getCachedThreadCID(threadId);
-      if (cachedCID) {
-        console.log(`   Trying cached CID ${cachedCID.slice(0, 12)}...`);
-        try {
-          const data = await this.getThreadByCID(cachedCID);
-          console.log('✅ Loaded thread from IPFS gateway (cached CID)');
-          return { data, cid: cachedCID };
-        } catch (ipfsError) {
-          console.warn('   Cached CID fetch failed, trying contract...');
-        }
-      }
-      
-      // Fallback 2: Get CID from contract (decentralized source of truth)
-      try {
-        console.log('   Fetching CID from contract...');
-        console.log('   Thread ID:', threadId);
-        const cidBytes32 = await contractService.getThreadCID(threadId);
-        console.log('   Raw bytes32 from contract:', cidBytes32);
-        
-        if (cidBytes32 && cidBytes32 !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
-          const cid = bytes32ToCid(cidBytes32);
-          console.log(`   Contract CID: ${cid}`);
-          
-          // Cache it for future use
-          this.cacheThreadCID(threadId, cid);
-          
-          const data = await this.getThreadByCID(cid);
-          console.log('✅ Loaded thread from IPFS gateway (contract CID)');
-          return { data, cid };
-        } else {
-          console.log('   Thread has no CID on contract yet (returned zero bytes)');
-        }
-      } catch (contractError) {
-        console.error('   Contract fetch failed:', contractError);
-        console.error('   Error details:', contractError instanceof Error ? contractError.message : String(contractError));
-      }
-      
-      throw error;
+    } catch (contractError) {
+      console.error('Contract fetch failed:', contractError);
+      return null;
     }
   }
 
-  // Fetch thread directly from IPFS by CID (no relayer needed)
-  async getThreadByCID(cid: string): Promise<any> {
-    const gateway = getIPFSGateway() || DEFAULT_IPFS_GATEWAY;
-    const response = await axios.get(`${gateway}/${cid}`, { timeout: 10000 });
-    return response.data;
+  /**
+   * Get thread file with CID - tries vault first, then contract fallback
+   */
+  async getThreadWithCID(threadId: string): Promise<{ data: any; cid: string | null } | null> {
+    const cachedCID = this.getCachedThreadCID(threadId);
+    
+    if (cachedCID) {
+      try {
+        const data = await this.getThreadByCID(cachedCID);
+        return { data, cid: cachedCID };
+      } catch (err) {
+        console.warn('Cached CID fetch failed');
+      }
+    }
+    
+    // Try contract
+    try {
+      const cidBytes32 = await contractService.getThreadCID(threadId);
+      if (cidBytes32 && cidBytes32 !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        const cid = bytes32ToCid(cidBytes32);
+        this.cacheThreadCID(threadId, cid);
+        const data = await this.getThreadByCID(cid);
+        return { data, cid };
+      }
+    } catch (err) {
+      console.error('Contract fetch failed:', err);
+    }
+    
+    return null;
   }
 
-  // Cache thread CIDs in localStorage for fallback
+  /**
+   * Fetch thread directly from vault by CID
+   */
+  async getThreadByCID(cid: string): Promise<any> {
+    const data = await vaultService.getBlobWithFallback(cid);
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(data));
+  }
+
+  /**
+   * Cache thread CIDs in localStorage for fallback
+   */
   private cacheThreadCID(threadId: string, cid: string): void {
     try {
       const cache = JSON.parse(localStorage.getItem('threadCIDCache') || '{}');
@@ -249,7 +235,9 @@ export class IPFSService {
     return null;
   }
 
-  // LEGACY: Old sendMessage (deprecated)
+  /**
+   * Legacy sendMessage - deprecated, throws error
+   */
   async sendMessage(
     sender: string,
     recipient: string,
@@ -262,53 +250,35 @@ export class IPFSService {
     subject?: string,
     replyTo?: number
   ): Promise<{ messageId: number; senderCID: string; recipientCID: string }> {
-    console.warn('⚠️ Using legacy sendMessage - should migrate to sendSignedMessage');
-    const response = await axios.post(`${RELAYER_URL}/api/messages/send`, {
-      sender,
-      recipient,
-      senderPublicKey,
-      recipientPublicKey,
-      senderEncryptedContent,
-      recipientEncryptedContent,
-      senderEncryptedMetadata,
-      recipientEncryptedMetadata,
-      subject,
-      replyTo
-    });
-    return response.data;
+    console.warn('⚠️ Legacy sendMessage called - use sendSignedMessage instead');
+    throw new Error('Legacy sendMessage is deprecated. Use sendSignedMessage with vault storage.');
   }
 
+  /**
+   * Mark message as read - now handled client-side
+   */
   async markAsRead(
     userAddress: string,
     userPublicKey: string,
     messageId: number
   ): Promise<{ cid: string }> {
-    const response = await axios.post(`${RELAYER_URL}/api/messages/mark-read`, {
-      userAddress,
-      userPublicKey,
-      messageId
-    });
-    return response.data;
+    console.log('markAsRead called - read receipts now handled client-side');
+    return { cid: '' };
   }
 
   getInboxMessages(messageFile: UserMessageFile, userAddress: string): Message[] {
-    // Inbox = messages where user is recipient
-    // These come from OTHER users' files (fetched via on-chain lookups)
     return messageFile.messages
       .filter(msg => msg.recipient.toLowerCase() === userAddress.toLowerCase())
       .sort((a, b) => b.timestamp - a.timestamp);
   }
 
   getSentMessages(messageFile: UserMessageFile, userAddress: string): Message[] {
-    // Sent = messages where user is sender
-    // These come from the user's own file
     return messageFile.messages
       .filter(msg => msg.sender.toLowerCase() === userAddress.toLowerCase())
       .sort((a, b) => b.timestamp - a.timestamp);
   }
 
   getUnreadCount(messageFile: UserMessageFile, userAddress: string): number {
-    // Count unread messages where user is recipient
     return messageFile.messages.filter(
       msg => msg.recipient.toLowerCase() === userAddress.toLowerCase() && !msg.isRead
     ).length;

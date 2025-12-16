@@ -80,67 +80,26 @@ export default function PostsFeed({
   }, [refreshTrigger]);
 
   /**
-   * Unpin content from IPFS
-   * Tries user's Pinata if configured, then relayer as fallback
+   * Unpin content from vault
+   * Note: Vault uses garbage collection, unpinning just removes the pin flag
    */
-  const unpinFromIPFS = async (cid: string, userAddress: string) => {
-    const ipfsCredentials = useSettingsStore.getState().ipfsCredentials;
+  const unpinFromVault = async (cid: string, _userAddress: string) => {
+    const vaultUrl = useSettingsStore.getState().vaultPrimaryNode;
     
-    // Try Pinata if user has it configured
-    if (ipfsCredentials && ipfsCredentials.provider === 'pinata') {
-      try {
-        console.log('🗑️ Unpinning from user Pinata...');
-        const response = await fetch(`https://api.pinata.cloud/pinning/unpin/${cid}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${ipfsCredentials.apiKey}`
-          }
-        });
-        
-        if (response.ok) {
-          console.log('✅ Unpinned from Pinata');
-          return; // Success, no need to try relayer
-        } else {
-          const error = await response.text();
-          console.warn('⚠️ Pinata unpin failed:', error);
-          console.log('📤 Falling back to relayer...');
-        }
-      } catch (pinataError) {
-        console.warn('⚠️ Pinata unpin error (trying relayer):', pinataError);
-      }
-    }
-    
-    // Try relayer (either as fallback or primary method)
     try {
-      console.log('🗑️ Unpinning from relayer...');
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
-      
-      const timestamp = Date.now();
-      const nonce = Math.random().toString(36).substring(7);
-      const message = `Unpin ${cid}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
-      const signature = await signer.signMessage(message);
-      
-      const unpinResponse = await fetch('http://localhost:3001/api/unpin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cid,
-          userAddress,
-          signature,
-          timestamp,
-          nonce
-        })
+      console.log('🗑️ Unpinning from vault...');
+      const response = await fetch(`${vaultUrl}/pin/${cid}`, {
+        method: 'DELETE'
       });
       
-      if (unpinResponse.ok) {
-        console.log('✅ Unpinned from relayer');
+      if (response.ok) {
+        console.log('✅ Unpinned from vault');
       } else {
-        const error = await unpinResponse.text();
-        console.warn('⚠️ Relayer unpin failed:', error);
+        const error = await response.text();
+        console.warn('⚠️ Vault unpin failed:', error);
       }
-    } catch (relayerError) {
-      console.warn('⚠️ Relayer unpin error (non-critical):', relayerError);
+    } catch (error) {
+      console.warn('⚠️ Vault unpin error (non-critical):', error);
     }
   };
 
@@ -356,7 +315,7 @@ export default function PostsFeed({
       
       // 2. Unpin from IPFS
       // Try user's Pinata first if configured, then relayer
-      await unpinFromIPFS(post.ipfsHash, userAddress);
+      await unpinFromVault(post.ipfsHash, userAddress);
 
       // 3. Reload posts to reflect deletion
       // Since contract now filters deleted posts, this will remove it from the feed

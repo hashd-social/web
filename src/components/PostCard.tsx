@@ -63,7 +63,7 @@ export default function PostCard({
   onComment
 }: PostCardProps) {
   const navigate = useNavigate();
-  const { ipfsGateway } = useSettingsStore();
+  const { vaultPrimaryNode } = useSettingsStore();
   const [content, setContent] = useState<PostContent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -296,7 +296,7 @@ export default function PostCard({
             {showMenu && (
               <div className="absolute right-0 mt-1 w-56 bg-gray-900/95 rounded-lg shadow-lg py-1 z-10">
                 <a
-                  href={`${ipfsGateway}/${ipfsCid}`}
+                  href={`${vaultPrimaryNode}/blob/${ipfsCid}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full px-4 py-2 text-left text-sm text-cyan-400 hover:bg-cyan-500/10 flex items-center gap-2 font-mono font-bold"

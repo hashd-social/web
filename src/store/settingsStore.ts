@@ -1,37 +1,38 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { IPFSProvider, IPFSCredentials } from '../services/ipfs/userCredentials';
+
+export type VaultFallbackStrategy = 'auto' | 'primary' | 'all';
 
 interface SettingsState {
   rpcUrl: string;
-  ipfsGateway: string;
-  ipfsCredentials: IPFSCredentials | null;
+  vaultPrimaryNode: string;
+  vaultFallbackStrategy: VaultFallbackStrategy;
   passkeyProtectionEnabled: boolean;
   setRpcUrl: (url: string) => void;
-  setIPFSGateway: (url: string) => void;
-  setIPFSCredentials: (credentials: IPFSCredentials | null) => void;
+  setVaultPrimaryNode: (url: string) => void;
+  setVaultFallbackStrategy: (strategy: VaultFallbackStrategy) => void;
   setPasskeyProtectionEnabled: (enabled: boolean) => void;
   resetToDefaults: () => void;
 }
 
 const DEFAULT_RPC_URL = process.env.REACT_APP_RPC_URL || 'http://localhost:8545';
-const DEFAULT_IPFS_GATEWAY = process.env.REACT_APP_IPFS_GATEWAY || 'https://3oh.myfilebase.com/ipfs';
+const DEFAULT_VAULT_NODE = process.env.REACT_APP_VAULT_API_URL || 'http://localhost:3004';
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       rpcUrl: DEFAULT_RPC_URL,
-      ipfsGateway: DEFAULT_IPFS_GATEWAY,
-      ipfsCredentials: null,
+      vaultPrimaryNode: DEFAULT_VAULT_NODE,
+      vaultFallbackStrategy: 'auto' as VaultFallbackStrategy,
       passkeyProtectionEnabled: false,
       setRpcUrl: (url: string) => set({ rpcUrl: url }),
-      setIPFSGateway: (url: string) => set({ ipfsGateway: url }),
-      setIPFSCredentials: (credentials: IPFSCredentials | null) => set({ ipfsCredentials: credentials }),
+      setVaultPrimaryNode: (url: string) => set({ vaultPrimaryNode: url }),
+      setVaultFallbackStrategy: (strategy: VaultFallbackStrategy) => set({ vaultFallbackStrategy: strategy }),
       setPasskeyProtectionEnabled: (enabled: boolean) => set({ passkeyProtectionEnabled: enabled }),
       resetToDefaults: () => set({ 
         rpcUrl: DEFAULT_RPC_URL,
-        ipfsGateway: DEFAULT_IPFS_GATEWAY,
-        ipfsCredentials: null,
+        vaultPrimaryNode: DEFAULT_VAULT_NODE,
+        vaultFallbackStrategy: 'auto' as VaultFallbackStrategy,
         passkeyProtectionEnabled: false
       }),
     }),
@@ -41,7 +42,11 @@ export const useSettingsStore = create<SettingsState>()(
   )
 );
 
-// Helper to get current IPFS gateway (for use outside React components)
-export const getIPFSGateway = (): string => {
-  return useSettingsStore.getState().ipfsGateway;
+// Helper to get current vault node (for use outside React components)
+export const getVaultPrimaryNode = (): string => {
+  return useSettingsStore.getState().vaultPrimaryNode;
+};
+
+export const getVaultFallbackStrategy = (): VaultFallbackStrategy => {
+  return useSettingsStore.getState().vaultFallbackStrategy;
 };

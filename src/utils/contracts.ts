@@ -6,48 +6,37 @@ import bs58 from 'bs58';
 // ============================================
 
 /**
- * Convert IPFS CID (v0 base58) to bytes32
- * CIDv0 format: Qm... (46 characters)
- * We strip the "Qm" prefix and convert to bytes32
+ * Convert CID (SHA-256 hex) to bytes32
+ * Vault uses 64-character hex strings as CIDs
  */
 export function cidToBytes32(cid: string): string {
-  if (!cid || !cid.startsWith('Qm')) {
-    throw new Error('Invalid CID format. Must be CIDv0 starting with Qm');
+  if (!cid) {
+    throw new Error('CID is required');
   }
   
-  // Decode base58 CID to bytes
-  const decoded = bs58.decode(cid);
+  // Already has 0x prefix
+  if (cid.startsWith('0x') && cid.length === 66) {
+    return cid.toLowerCase();
+  }
   
-  // CIDv0 structure: <multihash-prefix><hash>
-  // multihash-prefix is 2 bytes (0x1220 for sha256)
-  // We only store the 32-byte hash part
-  const hashBytes = decoded.slice(2); // Skip the 2-byte prefix
+  // 64-char hex string (SHA-256)
+  if (/^[a-f0-9]{64}$/i.test(cid)) {
+    return '0x' + cid.toLowerCase();
+  }
   
-  // Convert to hex string (bytes32) - browser compatible
-  return '0x' + Array.from(hashBytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  throw new Error(`Invalid CID format: ${cid.slice(0, 20)}...`);
 }
 
 /**
- * Convert bytes32 back to IPFS CID (v0 base58)
+ * Convert bytes32 back to CID (SHA-256 hex)
  */
 export function bytes32ToCid(bytes32Hash: string): string {
-  // Remove 0x prefix if present
-  const hashHex = bytes32Hash.startsWith('0x') ? bytes32Hash.slice(2) : bytes32Hash;
-  
-  // Add back the multihash prefix (0x1220 = sha256)
-  const multihashPrefix = '1220';
-  const fullHash = multihashPrefix + hashHex;
-  
-  // Convert hex to bytes - browser compatible
-  const hashBytes = new Uint8Array(fullHash.length / 2);
-  for (let i = 0; i < fullHash.length; i += 2) {
-    hashBytes[i / 2] = parseInt(fullHash.substr(i, 2), 16);
+  if (!bytes32Hash || bytes32Hash === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+    return '';
   }
   
-  // Encode as base58 (CIDv0 format)
-  return bs58.encode(hashBytes);
+  // Remove 0x prefix
+  return bytes32Hash.startsWith('0x') ? bytes32Hash.slice(2) : bytes32Hash;
 }
 
 // Contract ABIs (simplified for demo)
@@ -55,6 +44,14 @@ export const HASHD_ABI = [
   "function getContractAddresses() view returns (address keyRegistryAddr, address messageContractAddr)",
   "function getSystemInfo() view returns (string version, uint256 deployment, uint256 totalMessages, uint256 totalUnread, string mailboxName)",
   "function registerKeyAndSendMessage(bytes keyData, address recipient, bytes encryptedContent, bytes encryptedMetadata) returns (uint256)"
+];
+
+export const VAULT_NODE_REGISTRY_ABI = [
+  "function getNode(bytes32 nodeId) view returns (tuple(address owner, bytes publicKey, string url, bytes32 metadataHash, uint256 registeredAt, bool active))",
+  "function getAllNodes(uint256 offset, uint256 limit) view returns (bytes32[])",
+  "function getActiveNodes() view returns (bytes32[])",
+  "function getNodeCount() view returns (uint256 total, uint256 active)",
+  "function isNodeActive(bytes32 nodeId) view returns (bool)"
 ];
 
 export const ACCOUNT_REGISTRY_ABI = [
@@ -381,7 +378,6 @@ export const ERC721_ABI = [
 
 // Network configuration
 const CHAIN_ID = parseInt(process.env.REACT_APP_CHAIN_ID || "31337");
-const THIRDWEB_CLIENT_ID = process.env.REACT_APP_THIRDWEB_CLIENT_ID;
 const ENV_RPC_URL = process.env.REACT_APP_RPC_URL;
 
 // Detect network type
@@ -400,9 +396,9 @@ const getRpcUrl = (): string => {
     return "http://127.0.0.1:8545";
   }
   
-  // For MegaETH, use Thirdweb if available
-  if (IS_MEGAETH && THIRDWEB_CLIENT_ID) {
-    return `https://6342.rpc.thirdweb.com/${THIRDWEB_CLIENT_ID}`;
+  // For MegaETH, use public RPC
+  if (IS_MEGAETH) {
+    return "https://carrot.megaeth.com/rpc";
   }
   
   // Fallback - avoid localhost in production
@@ -415,21 +411,18 @@ const getRpcUrl = (): string => {
 };
 
 const RPC_URL = getRpcUrl();
-const USING_THIRDWEB = IS_MEGAETH && !!THIRDWEB_CLIENT_ID && !ENV_RPC_URL?.includes('localhost');
 
 export const NETWORK_CONFIG = {
   CHAIN_ID,
   RPC_URL,
-  CARROT_RPC_URL: "https://6342.rpc.thirdweb.com/4561b3e468b016cbcdd48d2269b05422", // Fallback for MegaETH
   EXPLORER_URL: process.env.REACT_APP_EXPLORER_URL || (IS_LOCAL ? "http://localhost:8545" : "https://www.megaexplorer.xyz"),
   NAME: IS_MEGAETH ? "MegaETH" : IS_LOCAL ? "Localhost" : "Unknown",
-  USING_THIRDWEB,
   IS_LOCAL,
   IS_MEGAETH
 };
 
 console.log(`🌐 Network: ${NETWORK_CONFIG.NAME} (Chain ID: ${CHAIN_ID})`);
-console.log(`📡 RPC Provider: ${USING_THIRDWEB ? 'Thirdweb' : IS_LOCAL ? 'Local Hardhat' : 'Direct RPC'}`);
+console.log(`📡 RPC Provider: ${IS_LOCAL ? 'Local Hardhat' : 'Direct RPC'}`);
 console.log(`🔗 RPC URL: ${RPC_URL}`);
 
 // Contract addresses - Always loaded from environment variables
@@ -447,6 +440,7 @@ export const CONTRACT_ADDRESSES = {
   HASHD_TAG: process.env.REACT_APP_HASHD_TAG || (() => {
     throw new Error('REACT_APP_HASHD_TAG not set in .env file');
   })(),
+  VAULT_NODE_REGISTRY: process.env.REACT_APP_VAULT_NODE_REGISTRY || '',
 };
 
 console.log('📋 CONTRACT_ADDRESSES loaded:', CONTRACT_ADDRESSES);
@@ -502,19 +496,8 @@ export class ContractService {
       try {
         return await originalSend(method, params);
       } catch (error: any) {
-        // If Thirdweb fails with 502, JSON parse errors, or unknown errors, try Carrot RPC as fallback
-        const shouldFallback = NETWORK_CONFIG.USING_THIRDWEB && (
-          error.message?.includes('502') || 
-          error.message?.includes('JSON') ||
-          error.message?.includes('Unexpected end') ||
-          error.code === 'UNKNOWN_ERROR'
-        );
-        
-        if (shouldFallback) {
-          console.warn('⚠️ Thirdweb RPC failed:', error.message, '- falling back to Carrot RPC...');
-          const fallbackProvider = new ethers.JsonRpcProvider(NETWORK_CONFIG.CARROT_RPC_URL);
-          return await fallbackProvider.send(method, params);
-        }
+        // Log RPC errors for debugging
+        console.error('RPC call failed:', error.message);
         throw error;
       }
     };
@@ -599,6 +582,12 @@ export class ContractService {
 
   // Initialize contracts with read-only provider (for read operations before wallet connection)
   initializeReadOnlyContracts() {
+    // Skip if we already have a signer (contracts are already write-enabled)
+    if (this.signer) {
+      console.log('⏭️ Skipping read-only init - signer already connected');
+      return;
+    }
+    
     const provider = this.getReadProvider();
     
     // Initialize AccountRegistry for read operations
@@ -971,14 +960,23 @@ export class ContractService {
     senderPublicKeyHash: string, // bytes32 hash of sender's public key
     recipientPublicKeyHash: string // bytes32 hash of recipient's public key
   ): Promise<ethers.ContractTransactionResponse> {
-    if (!this.contracts.messageContract) throw new Error('Contract not initialized');
+    // Get fresh signer from browser wallet
+    if (!window.ethereum) throw new Error('No wallet found');
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
     
-    return await this.contracts.messageContract.recordMessage(
+    const messageContract = new ethers.Contract(
+      CONTRACT_ADDRESSES.MESSAGE_CONTRACT,
+      MESSAGE_CONTRACT_ABI,
+      signer
+    );
+    
+    return await messageContract.recordMessage(
       sender,
       recipient,
       threadId,
       replyTo,
-      threadCID, // IPFS CID of thread file
+      threadCID,
       ackRequired,
       senderPublicKeyHash,
       recipientPublicKeyHash
@@ -2084,6 +2082,58 @@ export class ContractService {
 }
 
 export const contractService = new ContractService();
+
+/**
+ * Fetch vault nodes from on-chain registry
+ * Returns array of node URLs
+ */
+export async function getVaultNodesFromRegistry(): Promise<{ nodeId: string; url: string; active: boolean }[]> {
+  const registryAddress = CONTRACT_ADDRESSES.VAULT_NODE_REGISTRY;
+  
+  console.log('🔍 getVaultNodesFromRegistry called');
+  console.log('  Registry address:', registryAddress);
+  console.log('  RPC URL:', NETWORK_CONFIG.RPC_URL);
+  
+  if (!registryAddress) {
+    console.warn('VAULT_NODE_REGISTRY address not configured');
+    return [];
+  }
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(NETWORK_CONFIG.RPC_URL);
+    const registry = new ethers.Contract(registryAddress, VAULT_NODE_REGISTRY_ABI, provider);
+    
+    // Get all active node IDs
+    console.log('  Calling getActiveNodes()...');
+    const nodeIds: string[] = await registry.getActiveNodes();
+    console.log('  Found node IDs:', nodeIds.length, nodeIds);
+    
+    // Fetch node details for each
+    const nodes = await Promise.all(
+      nodeIds.map(async (nodeId: string) => {
+        try {
+          const node = await registry.getNode(nodeId);
+          console.log('  Node details for', nodeId.slice(0, 10) + '...:', node.url, 'active:', node.active);
+          return {
+            nodeId,
+            url: node.url,
+            active: node.active
+          };
+        } catch (err) {
+          console.warn('  Failed to get node:', nodeId, err);
+          return null;
+        }
+      })
+    );
+    
+    const activeNodes = nodes.filter((n): n is { nodeId: string; url: string; active: boolean } => n !== null && n.active);
+    console.log('  Returning', activeNodes.length, 'active nodes');
+    return activeNodes;
+  } catch (error) {
+    console.warn('Failed to fetch vault nodes from registry:', error);
+    return [];
+  }
+}
 
 // Debug function to check contract status
 export const debugContractStatus = () => {

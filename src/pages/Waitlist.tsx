@@ -126,7 +126,7 @@ export const Waitlist: React.FC = () => {
           </div>
           <h1 className="text-4xl font-bold neon-text-cyan mb-6 font-cyberpunk">CHECK YOUR EMAIL!</h1>
           <p className="text-gray-400 text-lg mb-12 max-w-xl mx-auto leading-relaxed">
-            Thank you! We've sent a verification email to confirm your address.
+             We've sent a verification email to confirm your address.
             <span className="block mt-4 text-cyan-400 font-bold">
               Please check your inbox and click the verification link to complete your registration.
             </span>

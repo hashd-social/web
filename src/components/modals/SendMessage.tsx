@@ -70,7 +70,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
   sessionEnabled = false,
   onSendWithSession
 }) => {
-  const { ipfsGateway } = useSettingsStore();
+  const { vaultPrimaryNode } = useSettingsStore();
 
   const [recipient, setRecipient] = useState('');
   const [message, setMessage] = useState('');
@@ -606,9 +606,9 @@ export const SendMessage: React.FC<SendMessageProps> = ({
         console.log('  Signature:', signedMessage.signature.slice(0, 20) + '...');
         console.log('  PrevHash:', signedMessage.prevHash);
         
-        // Send to relayer
-        console.log('📤 Uploading to IPFS via relayer...');
-        const result = await ipfsService.sendSignedMessage(signedMessage, threadId);
+        // Send to vault - use public keys as participants for threadId validation
+        console.log('📤 Uploading to vault...');
+        const result = await ipfsService.sendSignedMessage(signedMessage, threadId, publicKeyParticipants);
         
         console.log('✅ Message uploaded to shared thread!');
         console.log('  Thread CID:', result.threadCID);
@@ -680,15 +680,16 @@ export const SendMessage: React.FC<SendMessageProps> = ({
           console.log('  Could not check sender permission, continuing...');
         }
         
-        // Check if sender is initialized
+        // Check if sender is initialized (NotInitialized error is expected for new users)
         console.log('🔍 Checking sender initialization...');
         let senderInitialized = false;
         try {
           const senderMessages = await contractService.getUserMessages(userAddress);
-          console.log('  Sender initialized:', senderMessages.initialized);
           senderInitialized = senderMessages.initialized;
-        } catch (err) {
-          console.log('  Could not check sender initialization, assuming not initialized');
+          console.log('  Sender initialized:', senderInitialized);
+        } catch {
+          // NotInitialized error is expected for new users - this is fine
+          console.log('  Sender not yet initialized (first message)');
         }
         
         if (!senderInitialized) {
@@ -914,7 +915,7 @@ export const SendMessage: React.FC<SendMessageProps> = ({
           </p>
           <div className="flex gap-2">
             <a
-              href={`${ipfsGateway}/${ipfsCID}`}
+              href={`${vaultPrimaryNode}/blob/${ipfsCID}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-mono"

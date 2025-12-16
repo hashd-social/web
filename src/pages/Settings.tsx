@@ -6,8 +6,7 @@ import {
   SessionPersistenceToggle,
   PasskeyProtection,
   RpcEndpointSetting,
-  IpfsGatewaySetting,
-  IpfsUploadSetting,
+  VaultNodeSetting,
   DataManagement
 } from '../components/settings';
 import { CryptoKeyPair } from '../utils/crypto-simple';
@@ -81,14 +80,13 @@ export const Settings: React.FC<SettingsProps> = ({ accountAbstraction, walletAd
               Advanced Settings
             </h2>
             <p className="text-sm text-gray-400 mt-2">
-              Configure RPC endpoints, IPFS gateways, and upload methods
+              Configure RPC endpoints and vault node preferences
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <RpcEndpointSetting />
-            <IpfsGatewaySetting />
-            <IpfsUploadSetting />
+            <VaultNodeSetting />
           </div>
         </div>
 

@@ -151,7 +151,7 @@ export const Group: React.FC = () => {
         console.warn(`Posts contract not found at ${groupInfo.postsAddress}`);
       }
 
-      // Parallelize ALL contract calls (all using fast Thirdweb RPC)
+      // Parallelize ALL contract calls
       const [
         code,
         tokenName,

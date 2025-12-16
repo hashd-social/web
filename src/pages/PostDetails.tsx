@@ -31,7 +31,7 @@ interface PostDetailsProps {
 export default function PostDetails({ contractService, userAddress }: PostDetailsProps) {
   const { groupAddress, postId } = useParams<{ groupAddress: string; postId: string }>();
   const navigate = useNavigate();
-  const { ipfsGateway } = useSettingsStore();
+  const { vaultPrimaryNode } = useSettingsStore();
   
   const [groupPostsAddress, setGroupPostsAddress] = useState<string>('');
   const [post, setPost] = useState<any>(null);
@@ -204,7 +204,7 @@ export default function PostDetails({ contractService, userAddress }: PostDetail
                 {showMenu && (
                   <div className="absolute right-0 mt-1 w-56 bg-gray-900/95 rounded-lg shadow-lg py-1 z-10">
                     <a
-                      href={`${ipfsGateway}/${post.ipfsHash}`}
+                      href={`${vaultPrimaryNode}/blob/${post.ipfsHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full px-4 py-2 text-left text-sm text-cyan-400 hover:bg-cyan-500/10 flex items-center gap-2 font-mono font-bold"

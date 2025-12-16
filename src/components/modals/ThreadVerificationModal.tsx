@@ -31,7 +31,7 @@ export const ThreadVerificationModal: React.FC<ThreadVerificationModalProps> = (
   ackRequired = false,
   errors = []
 }) => {
-  const { ipfsGateway } = useSettingsStore();
+  const { vaultPrimaryNode } = useSettingsStore();
   const criticalErrors = errors.filter(e => e.severity === 'CRITICAL').length;
   const warnings = errors.filter(e => e.severity === 'WARNING').length;
 
@@ -100,7 +100,7 @@ export const ThreadVerificationModal: React.FC<ThreadVerificationModalProps> = (
             {threadCID && (
               <div className="pt-4 border-t border-gray-700/50">
                 <a
-                  href={`${ipfsGateway}/${threadCID}`}
+                  href={`${vaultPrimaryNode}/blob/${threadCID}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-mono"
