@@ -354,74 +354,12 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
               </div>
             </div>
 
-            {/* IPFS Gateway */}
+      {/* Available Domains */}
             <div className="bg-gray-800/50 rounded-lg p-6">
               <div className="flex items-center space-x-3 mb-4">
-                <HardDrive className="w-6 h-6 neon-text-cyan" />
-                <h3 className="text-lg font-bold neon-text-cyan font-mono">IPFS.GATEWAY</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-mono text-white font-bold">GATEWAY:</span>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-mono text-gray-400 px-2 py-1">
-                      {systemData?.ipfsGateway ? `${systemData.ipfsGateway.slice(0, 30)}...` : 'N/A'}
-                    </span>
-                    {systemData?.ipfsGateway && (
-                      <>
-                        <button
-                          onClick={() => copyToClipboard(systemData.ipfsGateway, 'ipfs')}
-                          className="p-1 hover:bg-cyan-500/10 rounded transition-colors"
-                          title="Copy IPFS Gateway URL"
-                        >
-                          <Copy className={`w-3.5 h-3.5 transition-colors ${
-                            copiedAddress === 'ipfs' ? 'text-green-400' : 'text-gray-500 hover:text-cyan-400'
-                          }`} />
-                        </button>
-                        <button
-                          onClick={() => window.open(systemData.ipfsGateway, '_blank')}
-                          className="p-1 hover:bg-cyan-500/10 rounded transition-colors"
-                          title="Open IPFS Gateway"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5 text-gray-500 hover:text-cyan-400" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-mono text-white font-bold">RELAYER:</span>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-mono text-gray-400 px-2 py-1">
-                      {systemData?.relayerUrl ? `${systemData.relayerUrl.slice(0, 30)}...` : 'N/A'}
-                    </span>
-                    {systemData?.relayerUrl && (
-                      <button
-                        onClick={() => copyToClipboard(systemData.relayerUrl, 'relayer')}
-                        className="p-1 hover:bg-cyan-500/10 rounded transition-colors"
-                        title="Copy Relayer URL"
-                      >
-                        <Copy className={`w-3.5 h-3.5 transition-colors ${
-                          copiedAddress === 'relayer' ? 'text-green-400' : 'text-gray-500 hover:text-cyan-400'
-                        }`} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-mono text-white font-bold">ENCRYPTION:</span>
-                  <span className="text-xs font-mono text-white">AES-256-GCM</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Available Domains */}
-          <div className="bg-gray-800/50 rounded-lg p-6 mb-8">
-            <div className="flex items-center space-x-3 mb-6">
-              <Server className="w-6 h-6 neon-text-cyan" />
+            <Server className="w-6 h-6 neon-text-cyan" />
               <h3 className="text-lg font-bold neon-text-cyan font-mono">AVAILABLE.DOMAINS</h3>
-            </div>
+              </div>
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {systemData?.availableDomains.map(domain => (
                 <div key={domain} className="text-center p-4 hover:bg-gray-700/30 transition-all">
@@ -430,6 +368,7 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
                   <div className="text-xs neon-text-green font-mono mt-1">ACTIVE</div>
                 </div>
               ))}
+            </div>
             </div>
           </div>
 
