@@ -110,6 +110,12 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
         address: process.env.REACT_APP_VAULT_REGISTRY_STORAGE || 'Not deployed',
         description: '🔒 Eternal - Vault node registry data',
         icon: '💾'
+      },
+      {
+        name: 'AppRegistryStorage',
+        address: process.env.REACT_APP_APP_REGISTRY_STORAGE || 'Not deployed',
+        description: '🔒 Eternal - App registry data',
+        icon: '💾'
       }
     ];
     return contracts.filter(c => c.address !== 'Not deployed');
@@ -120,73 +126,85 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
       {
         name: 'KeyRegistry',
         address: process.env.REACT_APP_KEY_REGISTRY || 'Not deployed',
-        description: '🔄 Upgradeable - Key registration & management',
+        description: 'Key registration & management',
         icon: '🔑'
       },
       {
         name: 'AccountRegistry',
         address: process.env.REACT_APP_ACCOUNT_REGISTRY || 'Not deployed',
-        description: '🔄 Upgradeable - Account registration & domains',
+        description: 'Account registration & domains',
         icon: '📧'
       },
       {
         name: 'HashID (NFT)',
         address: process.env.REACT_APP_HASHD_TAG || 'Not deployed',
-        description: '🔄 Upgradeable - Account NFT collection',
+        description: 'Account NFT collection',
         icon: '🎫'
       },
       {
         name: 'MessageContract',
         address: process.env.REACT_APP_MESSAGE_CONTRACT || 'Not deployed',
-        description: '🔄 Upgradeable - Messaging & threads logic',
+        description: 'Messaging & threads logic',
         icon: '💬'
       },
       {
         name: 'UserProfile',
         address: process.env.REACT_APP_USER_PROFILE || 'Not deployed',
-        description: '🔄 Upgradeable - User profiles & memberships',
+        description: 'User profiles & memberships',
         icon: '👤'
       },
       {
         name: 'GroupPostsDeployer',
         address: process.env.REACT_APP_GROUP_POSTS_DEPLOYER || 'Not deployed',
-        description: '🔄 Upgradeable - Deploys GroupPosts contracts',
+        description: 'Deploys GroupPosts contracts',
         icon: '📝'
       },
       {
         name: 'GroupCommentsDeployer',
         address: process.env.REACT_APP_GROUP_COMMENTS_DEPLOYER || 'Not deployed',
-        description: '🔄 Upgradeable - Deploys GroupComments contracts',
+        description: 'Deploys GroupComments contracts',
         icon: '💬'
       },
       {
         name: 'BondingCurveDeployer',
         address: process.env.REACT_APP_BONDING_CURVE_DEPLOYER || 'Not deployed',
-        description: '🔄 Upgradeable - Deploys token bonding curves',
+        description: 'Deploys token bonding curves',
         icon: '📈'
       },
       {
         name: 'GroupFactory',
         address: process.env.REACT_APP_GROUP_FACTORY || 'Not deployed',
-        description: '🔄 Upgradeable - Group creation & management',
+        description: 'Group creation & management',
         icon: '🏭'
       },
       {
         name: 'DeploymentRegistry',
         address: process.env.REACT_APP_DEPLOYMENT_REGISTRY || 'Not deployed',
-        description: '🔒 Immutable - Frontend deployment verification',
+        description: 'Frontend deployment verification',
         icon: '✅'
       },
       {
-        name: 'VaultNodeRegistryV1',
+        name: 'VaultNodeRegistry',
         address: process.env.REACT_APP_VAULT_REGISTRY || 'Not deployed',
-        description: '🔄 Upgradeable - Vault node registration & management',
+        description: 'Vault node registration & staking',
         icon: '🗄️'
+      },
+      {
+        name: 'VaultIncentives',
+        address: process.env.REACT_APP_VAULT_INCENTIVES || 'Not deployed',
+        description: 'Vault node rewards & incentives',
+        icon: '💎'
+      },
+      {
+        name: 'AppRegistry',
+        address: process.env.REACT_APP_APP_REGISTRY || 'Not deployed',
+        description: 'App registration & authorization',
+        icon: '📱'
       },
       {
         name: 'PlatformTreasury',
         address: process.env.REACT_APP_PLATFORM_TREASURY || 'Not deployed',
-        description: '🔄 UUPS Upgradeable - Fee collection & distribution',
+        description: 'Fee collection & distribution',
         icon: '💰'
       }
     ];

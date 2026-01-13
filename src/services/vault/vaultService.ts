@@ -49,8 +49,9 @@ Context: {context}
 Timestamp: {timestamp}
 Nonce: {nonce}`;
 
-// Default vault URL (used if settings not available)
-const DEFAULT_VAULT_URL = process.env.REACT_APP_VAULT_API_URL || 'http://localhost:3004';
+// Default vault URL - will be overridden by registry nodes
+// Only used as last resort fallback if registry is unavailable
+const DEFAULT_VAULT_URL = process.env.REACT_APP_DEFAULT_VAULT_URL || 'http://localhost:5001';
 
 // Content type mapping from AuthorizationType to vault content types
 type VaultContentType = 'messages' | 'posts' | 'media' | 'listings';
