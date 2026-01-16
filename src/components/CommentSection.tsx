@@ -7,7 +7,7 @@ interface Comment {
   id: number;
   postId: number;
   author: string;
-  ipfsHash: string;
+  contentHash: string;
   timestamp: number;
   upvotes: number;
   isDeleted: boolean;
@@ -76,8 +76,8 @@ export default function CommentSection({
       for (const comment of commentsData) {
         if (!comment.isDeleted) {
           try {
-            const content = await downloadAndDecryptComment(comment.ipfsHash, groupKey);
-            textMap.set(comment.id, content.text);
+            const decrypted = await downloadAndDecryptComment(comment.contentHash, groupKey);
+            textMap.set(comment.id, decrypted.text);
           } catch (err) {
             console.error(`Error decrypting comment ${comment.id}:`, err);
             textMap.set(comment.id, '[Failed to decrypt]');

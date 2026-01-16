@@ -31,7 +31,7 @@ async function canDecryptThread(
   keyPair: CryptoKeyPair
 ): Promise<boolean> {
   try {
-    // Get thread file from IPFS
+    // Get thread file from ByteCave
     const threadFile = await ipfsService.getThread(threadId);
     if (!threadFile || threadFile.messages.length === 0) {
       return false;
@@ -154,7 +154,7 @@ export async function getUserThreads(
     console.log(`Found ${uniqueThreadIds.length} unique threads`);
     
     // If we filtered by public key hash, we already know these threads are for this mailbox
-    // Skip the expensive IPFS decryption check
+    // Skip the expensive decryption check
     if (publicKeyHash) {
       console.log('✅ Threads already filtered by public key hash - skipping decryption check');
       console.log(`   Adding ${uniqueThreadIds.length} threads directly:`, uniqueThreadIds);
@@ -211,21 +211,21 @@ export async function loadThread(
     return [];
   }
   
-  // Get thread file from IPFS (with fallback to contract+gateway)
+  // Get thread file from ByteCave (with fallback to contract+gateway)
   let threadFile: ThreadFile | null = null;
   try {
     threadFile = await ipfsService.getThread(threadId);
   } catch (error) {
-    console.error('Failed to load thread from IPFS:', error);
+    console.error('Failed to load thread from ByteCave:', error);
     return [];
   }
   
   if (!threadFile) {
-    console.log('Thread not found in IPFS');
+    console.log('Thread not found in ByteCave');
     return [];
   }
   
-  console.log(`Found thread with ${threadFile.messages.length} messages in IPFS`);
+  console.log(`Found thread with ${threadFile.messages.length} messages in ByteCave`);
   console.log(`📊 Only showing ${onChainMessageCount} confirmed messages`);
   
   // Only use messages that are confirmed on-chain

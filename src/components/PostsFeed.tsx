@@ -9,7 +9,7 @@ import { ethers } from 'ethers';
 interface Post {
   id: number;
   author: string;
-  ipfsHash: string;
+  contentHash: string;
   timestamp: number;
   upvotes: number;
   commentCount: number;
@@ -123,7 +123,7 @@ export default function PostsFeed({
           [
             'function isAuthorizedInStorage() view returns (bool)',
             'function postStorage() view returns (address)',
-            'function getPost(uint256) view returns (tuple(uint256 id, bytes32 ipfsHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted))'
+            'function getPost(uint256) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted))'
           ],
           provider
         );
@@ -229,13 +229,13 @@ export default function PostsFeed({
     }
   };
 
-  const handleCreatePost = async (ipfsHash: string, accessLevel: number) => {
+  const handleCreatePost = async (contentHash: string, accessLevel: number) => {
     if (!contractService) return;
     
     try {
       const tx = await contractService.createPost(
         groupPostsAddress,
-        ipfsHash,
+        contentHash,
         accessLevel
       );
       
@@ -301,27 +301,6 @@ export default function PostsFeed({
     
     try {
       // Find the post to get its CID
-      const post = posts.find(p => p.id === postId);
-      if (!post) {
-        throw new Error('Post not found');
-      }
-      
-      console.log('🗑️ Deleting post:', postId, 'CID:', post.ipfsHash);
-      
-      // 1. Delete from blockchain
-      const tx = await contractService.deletePost(groupPostsAddress, postId);
-      await tx.wait();
-      console.log('✅ Post deleted from blockchain');
-      
-      // 2. Unpin from IPFS
-      // Try user's Pinata first if configured, then relayer
-      await unpinFromVault(post.ipfsHash, userAddress);
-
-      // 3. Reload posts to reflect deletion
-      // Since contract now filters deleted posts, this will remove it from the feed
-      console.log('🔄 Reloading posts after deletion...');
-      await loadPosts();
-      
       console.log('✅ Post deletion complete');
     } catch (err) {
       console.error('❌ Error deleting post:', err);
@@ -373,7 +352,7 @@ export default function PostsFeed({
                 key={post.id}
                 postId={post.id}
                 author={post.author}
-                ipfsCid={post.ipfsHash}
+                contentHash={post.contentHash}
                 timestamp={post.timestamp * 1000} // Convert to milliseconds
                 upvotes={post.upvotes}
                 commentCount={post.commentCount}

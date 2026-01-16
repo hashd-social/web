@@ -28,6 +28,7 @@ import { LoadingState } from './components/Spinner';
 import { MailboxSwitcher } from './components/modals/MailboxSwitcher';
 import { ForceMailboxSelection } from './components/modals/ForceMailboxSelection';
 import { ToastProvider, toast } from './components/Toast';
+import { ByteCaveProvider } from '@hashd/bytecave-browser';
 import { PasskeyLockScreen } from './components/PasskeyLockScreen';
 import { hasPasskey } from './services/passkeyService';
 import { Waitlist } from './pages/Waitlist';
@@ -1706,13 +1707,24 @@ function App() {
   );
 }
 
-// Wrap App with ToastProvider
-function AppWithToast() {
+// Wrap App with providers
+function AppWithProviders() {
+  const vaultRegistry = process.env.REACT_APP_VAULT_REGISTRY || '';
+  const rpcUrl = process.env.REACT_APP_RPC_URL || 'http://localhost:8545';
+  const relayPeersEnv = process.env.REACT_APP_RELAY_PEERS || '';
+  const relayPeers = relayPeersEnv ? relayPeersEnv.split(',').map(p => p.trim()).filter(Boolean) : [];
+
   return (
     <ToastProvider>
-      <App />
+      <ByteCaveProvider
+        contractAddress={vaultRegistry}
+        rpcUrl={rpcUrl}
+        relayPeers={relayPeers}
+      >
+        <App />
+      </ByteCaveProvider>
     </ToastProvider>
   );
 }
 
-export default AppWithToast;
+export default AppWithProviders;

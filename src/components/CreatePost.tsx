@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Image as ImageIcon, X, Loader2 as Loader, Download, Check, Copy, Send, ChevronDown, Upload, CheckCircle, Globe, Users, Coins, Award } from 'lucide-react';
-import { encryptContent, PostContent, AccessLevel, uploadToIPFS } from '../services/ipfs/groupPosts';
+import { encryptContent, PostContent, AccessLevel, uploadToVault } from '../services/ipfs/groupPosts';
 import { ethers } from 'ethers';
 
 interface ProgressStep {
@@ -14,7 +14,7 @@ interface CreatePostProps {
   groupPostsAddress: string;
   groupKey: string;
   userAddress: string;
-  onPostCreated: (ipfsHash: string, accessLevel: number) => Promise<void>;
+  onPostCreated: (contentHash: string, accessLevel: number) => Promise<void>;
   hasNFT?: boolean;
   hasToken?: boolean;
   isMember?: boolean;
@@ -150,7 +150,7 @@ export default function CreatePost({
   // Submit with manual CID
   const handleManualSubmit = async () => {
     if (!manualCID.trim()) {
-      setError('Please enter the IPFS CID');
+      setError('Please enter the content CID');
       return;
     }
 
@@ -202,7 +202,7 @@ export default function CreatePost({
     // Initialize progress steps
     setProgressSteps([
       { label: 'Checking membership', status: 'active', message: 'Verifying you can post...' },
-      { label: 'Uploading to IPFS', status: 'pending' },
+      { label: 'Uploading to ByteCave', status: 'pending' },
       { label: 'Publishing post', status: 'pending' }
     ]);
 
@@ -222,11 +222,11 @@ export default function CreatePost({
       const encrypted = await encryptContent(content, groupKey);
       const hash = ethers.keccak256(encrypted);
 
-      // Step 2: Upload to IPFS (uses Pinata if configured, otherwise relayer)
-      updateStep(1, 'active', 'Uploading to IPFS...');
+      // Step 2: Upload to ByteCave vault
+      updateStep(1, 'active', 'Uploading to ByteCave...');
       
-      const cid = await uploadToIPFS(encrypted, userAddress, groupPostsAddress);
-      updateStep(1, 'complete', `Uploaded to IPFS: ${cid.slice(0, 8)}...`);
+      const cid = await uploadToVault(encrypted, userAddress, groupPostsAddress);
+      updateStep(1, 'complete', `Uploaded to vault: ${cid.slice(0, 8)}...`);
 
       // Step 3: Publishing post on-chain
       updateStep(2, 'active', 'Please sign the transaction...');
@@ -321,11 +321,11 @@ export default function CreatePost({
 
           {/* Upload Instructions */}
           <div className="bg-cyan-900/20 rounded-lg p-4">
-            <h4 className="font-bold text-cyan-400 mb-2 uppercase tracking-wider font-mono text-sm">Step 2: Upload to Your IPFS Service</h4>
+            <h4 className="font-bold text-cyan-400 mb-2 uppercase tracking-wider font-mono text-sm">Step 2: Upload to ByteCave</h4>
             <ol className="list-decimal list-inside space-y-1 text-sm text-gray-300 font-mono">
-              <li>Go to your Pinata/Filebase/Web3.Storage dashboard</li>
-              <li>Upload the downloaded .enc file (or paste base64)</li>
-              <li>Copy the IPFS CID (starts with "Qm..." or "bafy...")</li>
+              <li>Download the encrypted file</li>
+              <li>Upload to ByteCave vault node</li>
+              <li>Copy the content CID (64-character hex string)</li>
               <li>Paste the CID below</li>
             </ol>
           </div>
@@ -333,7 +333,7 @@ export default function CreatePost({
           {/* CID Input */}
           <div>
             <label className="block text-xs font-bold neon-text-cyan uppercase tracking-wider mb-2 font-mono">
-              Step 3: Enter IPFS CID
+              Step 3: Enter Content CID
             </label>
             <input
               type="text"

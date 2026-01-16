@@ -37,14 +37,6 @@ interface UserMessageFile {
 }
 
 export class IPFSService {
-  /**
-   * Initialize user - no longer needed with vault (user just starts sending)
-   * Kept for backwards compatibility
-   */
-  async initializeUser(userAddress: string, publicKey: string): Promise<{ ipnsName: string; cid: string }> {
-    console.log('initializeUser called - no longer needed with vault storage');
-    return { ipnsName: '', cid: '' };
-  }
 
   /**
    * Get user messages - fetches from vault by CID

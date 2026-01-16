@@ -1,12 +1,13 @@
 import { ethers } from 'ethers';
 import { getVaultPrimaryNode } from '../../store/settingsStore';
 import { vaultService } from '../vault';
+import { cidToBytes32, bytes32ToCid } from '../../utils/contracts';
 
 /**
- * IPFS Service for Group Posts
+ * Group Posts Storage Service
  * Handles encryption, upload, download, and decryption of group post content
  * 
- * Storage: Uses vault nodes with on-chain authorization verification
+ * Storage: Uses ByteCave vault nodes with on-chain authorization
  */
 
 // Helper to get current vault node URL
@@ -100,15 +101,14 @@ export async function decryptContent(
 }
 
 /**
- * Upload encrypted content to vault
- * Uses vault nodes with on-chain authorization verification
+ * Upload encrypted content to ByteCave vault
  */
-export async function uploadToIPFS(
+export async function uploadToVault(
   encryptedData: Uint8Array,
   userAddress: string,
   groupPostsAddress: string
 ): Promise<string> {
-  console.log('📤 Uploading to vault...');
+  console.log('📤 Uploading to ByteCave vault...');
   try {
     const cid = await vaultService.uploadGroupPost(encryptedData, groupPostsAddress);
     console.log(`✅ Uploaded to vault: ${cid}`);
@@ -119,12 +119,15 @@ export async function uploadToIPFS(
   }
 }
 
+// Legacy alias for backward compatibility
+export const uploadToIPFS = uploadToVault;
+
 /**
- * Download content from vault
+ * Download content from ByteCave vault
  */
-export async function downloadFromIPFS(cid: string): Promise<Uint8Array> {
+export async function downloadFromVault(cid: string): Promise<Uint8Array> {
   try {
-    console.log('📥 Downloading from vault:', cid);
+    console.log('📥 Downloading from ByteCave vault:', cid);
     const data = await vaultService.getBlobWithFallback(cid);
     return data;
   } catch (error) {
@@ -133,63 +136,13 @@ export async function downloadFromIPFS(cid: string): Promise<Uint8Array> {
   }
 }
 
-// LocalStorage key for CID mapping
-const CID_MAPPING_KEY = 'ipfs_cid_mapping';
+// Legacy alias for backward compatibility
+export const downloadFromIPFS = downloadFromVault;
 
-/**
- * Store CID mapping in localStorage
- */
-function storeCidMapping(bytes32: string, cid: string) {
-  try {
-    const mapping = JSON.parse(localStorage.getItem(CID_MAPPING_KEY) || '{}');
-    mapping[bytes32] = cid;
-    localStorage.setItem(CID_MAPPING_KEY, JSON.stringify(mapping));
-  } catch (error) {
-    console.error('Error storing CID mapping:', error);
-  }
-}
-
-/**
- * Get CID from bytes32
- */
-function getCidFromBytes32(bytes32: string): string | null {
-  try {
-    const mapping = JSON.parse(localStorage.getItem(CID_MAPPING_KEY) || '{}');
-    return mapping[bytes32] || null;
-  } catch (error) {
-    console.error('Error getting CID mapping:', error);
-    return null;
-  }
-}
-
-/**
- * Convert CID string to bytes32 for smart contract storage
- */
-export function cidToBytes32(cid: string): string {
-  // Hash the CID to get bytes32
-  const bytes32 = ethers.id(cid);
-  
-  // Store the mapping for retrieval
-  storeCidMapping(bytes32, cid);
-  
-  return bytes32;
-}
-
-/**
- * Convert bytes32 back to CID using localStorage mapping
- */
-export function bytes32ToCid(bytes32: string): string {
-  // Try to get from localStorage
-  const cid = getCidFromBytes32(bytes32);
-  
-  if (cid) {
-    return cid;
-  }
-  
-  // If not found, return the bytes32 as-is (will fail but shows the issue)
-  console.warn(`CID not found for bytes32: ${bytes32}`);
-  return bytes32;
-}
+// CID conversion functions are imported from utils/contracts.ts
+// ByteCave uses SHA-256 hex strings (64 chars) as CIDs
+// These are converted to/from bytes32 for on-chain storage
+export { cidToBytes32, bytes32ToCid } from '../../utils/contracts';
 
 /**
  * High-level function: Encrypt and upload post content
@@ -201,7 +154,7 @@ export async function encryptAndUploadPost(
   groupPostsAddress: string
 ): Promise<string> {
   const encrypted = await encryptContent(content, groupKey);
-  const cid = await uploadToIPFS(encrypted, userAddress, groupPostsAddress);
+  const cid = await uploadToVault(encrypted, userAddress, groupPostsAddress);
   
   return cid;
 }
@@ -213,7 +166,7 @@ export async function downloadAndDecryptPost(
   cid: string,
   groupKey: string
 ): Promise<PostContent> {
-  const encrypted = await downloadFromIPFS(cid);
+  const encrypted = await downloadFromVault(cid);
   const content = await decryptContent(encrypted, groupKey);
   return content as PostContent;
 }
@@ -228,7 +181,7 @@ export async function encryptAndUploadComment(
   groupPostsAddress: string
 ): Promise<string> {
   const encrypted = await encryptContent(content, groupKey);
-  const cid = await uploadToIPFS(encrypted, userAddress, groupPostsAddress);
+  const cid = await uploadToVault(encrypted, userAddress, groupPostsAddress);
   
   return cid;
 }
@@ -240,7 +193,7 @@ export async function downloadAndDecryptComment(
   cid: string,
   groupKey: string
 ): Promise<CommentContent> {
-  const encrypted = await downloadFromIPFS(cid);
+  const encrypted = await downloadFromVault(cid);
   const content = await decryptContent(encrypted, groupKey);
   return content as CommentContent;
 }
@@ -270,9 +223,12 @@ export function deriveGroupKey(groupTokenAddress: string, accessLevel: AccessLev
  */
 
 /**
- * Get IPFS gateway URL for viewing content
+ * Get ByteCave gateway URL for viewing content
  */
-export function getIPFSGatewayUrl(cid: string): string {
+export function getVaultGatewayUrl(cid: string): string {
   return `${getVaultUrl()}/blob/${cid}`;
 }
+
+// Legacy alias for backward compatibility
+export const getIPFSGatewayUrl = getVaultGatewayUrl;
 

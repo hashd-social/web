@@ -1,9 +1,11 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { Users, Coins, Award, Info, CheckCircle } from 'lucide-react';
 import { NeonModal } from './NeonModal';
 import { MatrixNotify } from '../MatrixNotify';
 import { Stepper, Step } from '../Stepper';
+import { ImageUpload } from '../ImageUpload';
 import { GROUP_FACTORY_ABI } from '../../utils/contracts';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
@@ -20,6 +22,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
     title: '',
     description: '',
     imageURI: '',
+    imageCID: '',
     tokenName: '',
     tokenSymbol: '',
     nftName: '',
@@ -42,6 +45,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
           title: '',
           description: '',
           imageURI: '',
+          imageCID: '',
           tokenName: '',
           tokenSymbol: '',
           nftName: '',
@@ -177,6 +181,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         title: '',
         description: '',
         imageURI: '',
+        imageCID: '',
         tokenName: '',
         tokenSymbol: '',
         nftName: '',
@@ -256,16 +261,23 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
           <div>
             <label className="text-xs font-bold neon-text-cyan uppercase tracking-wider mb-3 block font-mono flex items-center gap-2">
               <div className="w-1 h-4 bg-cyan-500 rounded-full"></div>
-              Image URL * (also NFT image)
+              Guild Image * (also NFT image)
             </label>
-            <input
-              type="url"
-              value={formData.imageURI}
-              onChange={(e) => setFormData({ ...formData, imageURI: e.target.value })}
-              className="w-full px-4 py-3 bg-gray-900/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 hover:border-cyan-500/50 font-mono text-sm transition-colors"
-              placeholder="https://example.com/image.png or ipfs://..."
+            <ImageUpload
+              onImageUploaded={(url, cid) => {
+                setFormData({ ...formData, imageURI: url, imageCID: cid });
+              }}
+              currentImageUrl={formData.imageURI}
               disabled={isCreating}
+              maxSizeMB={5}
             />
+            {formData.imageCID && (
+              <div className="mt-2 bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2">
+                <p className="text-xs text-gray-400 font-mono">
+                  <strong className="text-cyan-400">CID:</strong> {formData.imageCID}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )
@@ -545,3 +557,4 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
     </NeonModal>
   );
 };
+

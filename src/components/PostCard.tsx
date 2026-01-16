@@ -22,7 +22,7 @@ const formatTimeAgo = (timestamp: number): string => {
 interface PostCardProps {
   postId: number;
   author: string;
-  ipfsCid: string;
+  contentHash: string;
   timestamp: number;
   upvotes: number;
   commentCount: number;
@@ -44,7 +44,7 @@ interface PostCardProps {
 export default function PostCard({
   postId,
   author,
-  ipfsCid,
+  contentHash,
   timestamp,
   upvotes,
   commentCount,
@@ -73,7 +73,7 @@ export default function PostCard({
 
   useEffect(() => {
     loadContent();
-  }, [ipfsCid, groupKey]);
+  }, [contentHash, groupKey]);
 
   // Check if user has access to view this post
   // Hierarchy: NFT Holders > Token Holders > Members > Public
@@ -123,7 +123,7 @@ export default function PostCard({
         return;
       }
 
-      const decrypted = await downloadAndDecryptPost(ipfsCid, groupKey);
+      const decrypted = await downloadAndDecryptPost(contentHash, groupKey);
       setContent(decrypted);
     } catch (err) {
       console.error('Error loading post:', err);
@@ -296,13 +296,13 @@ export default function PostCard({
             {showMenu && (
               <div className="absolute right-0 mt-1 w-56 bg-gray-900/95 rounded-lg shadow-lg py-1 z-10">
                 <a
-                  href={`${vaultPrimaryNode}/blob/${ipfsCid}`}
+                  href={`${vaultPrimaryNode}/blob/${contentHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full px-4 py-2 text-left text-sm text-cyan-400 hover:bg-cyan-500/10 flex items-center gap-2 font-mono font-bold"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  View on IPFS
+                  View on ByteCave
                 </a>
                 {(isAuthor || isOwner) && onDelete && (
                   <button

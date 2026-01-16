@@ -80,7 +80,7 @@ export const About: React.FC = () => {
                 cryptography, and people who refuse to ask permission.
               </p>
               <p>
-                HASHD runs on smart contracts and IPFS. There's no backend to seize, no admin panel 
+                HASHD runs on smart contracts and ByteCave, our decentralized storage network. There's no backend to seize, no admin panel 
                 to compromise, no Terms of Service that can change overnight. The code is the law, 
                 and the law is open source.
               </p>
