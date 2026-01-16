@@ -1,12 +1,13 @@
 /**
  * useByteCaveUpload Hook
  * 
- * Reusable hook for uploading files to ByteCave storage network with authorization.
- * All uploads include sender signature for ownership tracking and future payment.
+ * Reusable hook for uploading files to ByteCave storage network via P2P.
+ * Uses direct P2P connection to nodes instead of HTTP gateway.
  */
 
 import { useState, useCallback } from 'react';
-import { vaultService } from '../services/vault/vaultService';
+import { useByteCaveClient } from './useByteCaveClient';
+import { ethers } from 'ethers';
 
 interface UploadOptions {
   maxSizeMB?: number;
@@ -31,6 +32,7 @@ const DEFAULT_MAX_SIZE_MB = 5;
 const DEFAULT_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
 
 export const useByteCaveUpload = () => {
+  const { client, isConnected } = useByteCaveClient();
   const [uploadState, setUploadState] = useState<UploadState>({
     isUploading: false,
     progress: 0,
@@ -59,6 +61,13 @@ export const useByteCaveUpload = () => {
     file: File,
     options: UploadOptions = {}
   ): Promise<UploadResult> => {
+    // Check if client is available
+    if (!client || !isConnected) {
+      const error = 'ByteCave P2P client not connected. Please wait for connection.';
+      setUploadState({ isUploading: false, progress: 0, error });
+      return { success: false, error };
+    }
+
     // Validate file
     const validationError = validateFile(file, options);
     if (validationError) {
@@ -79,14 +88,26 @@ export const useByteCaveUpload = () => {
       }
       setUploadState(prev => ({ ...prev, progress: 30 }));
 
-      // Generate unique media ID for this upload
-      const mediaId = `media-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      // Get signer from MetaMask for authorization
+      let signer;
+      try {
+        if (typeof window !== 'undefined' && (window as any).ethereum) {
+          const provider = new ethers.BrowserProvider((window as any).ethereum);
+          signer = await provider.getSigner();
+        }
+      } catch (err) {
+        console.warn('[ByteCaveUpload] Could not get signer, uploading without authorization:', err);
+      }
 
-      // Upload to vault with authorization (includes sender signature)
-      console.log('[ByteCaveUpload] Uploading file with authorization:', file.name, 'Size:', file.size, 'bytes');
-      const cid = await vaultService.uploadMedia(data, mediaId);
+      // Upload via P2P using ByteCave client
+      console.log('[ByteCaveUpload] Uploading file via P2P:', file.name, 'Size:', file.size, 'bytes');
+      const result = await (client as any).store(data, file.type, signer);
 
-      console.log('[ByteCaveUpload] Upload successful, CID:', cid);
+      if (!result.success) {
+        throw new Error(result.error || 'P2P upload failed');
+      }
+
+      console.log('[ByteCaveUpload] P2P upload successful, CID:', result.cid);
 
       // Update progress
       if (options.onProgress) {
@@ -94,10 +115,9 @@ export const useByteCaveUpload = () => {
       }
       setUploadState(prev => ({ ...prev, progress: 80 }));
 
-      // Generate HTTP gateway URL using vault primary node
-      const { getVaultPrimaryNode } = require('../store/settingsStore');
-      const vaultUrl = getVaultPrimaryNode() || 'http://localhost:3004';
-      const gatewayUrl = `${vaultUrl}/blob/${cid}`;
+      // Generate HTTP gateway URL - use default localhost endpoint
+      // TODO: Get actual node HTTP endpoint from peer info when available
+      const gatewayUrl = `http://localhost:5001/blob/${result.cid}`;
 
       console.log('[ByteCaveUpload] Gateway URL:', gatewayUrl);
 
@@ -109,7 +129,7 @@ export const useByteCaveUpload = () => {
 
       return {
         success: true,
-        cid,
+        cid: result.cid,
         url: gatewayUrl
       };
 
@@ -119,7 +139,7 @@ export const useByteCaveUpload = () => {
       setUploadState({ isUploading: false, progress: 0, error: errorMessage });
       return { success: false, error: errorMessage };
     }
-  }, [validateFile]);
+  }, [client, isConnected, validateFile]);
 
   const uploadImage = useCallback(async (
     file: File,

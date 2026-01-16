@@ -35,7 +35,7 @@ export const NeonModal: React.FC<NeonModalProps> = ({
   return (
     <div 
       className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50"
-      onClick={onClose}
+      // onClick={onClose}
     >
       <div 
         className={`relative bg-gray-900/95 border-2 border-cyan-500/30 rounded-2xl shadow-2xl ${maxWidthClasses[maxWidth]} w-full max-h-[85vh] overflow-hidden backdrop-blur-xl`}
