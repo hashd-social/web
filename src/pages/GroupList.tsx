@@ -8,7 +8,7 @@ import { PageHeader } from '../components/PageHeader';
 import { TabBar, Tab } from '../components/TabBar';
 import { Tooltip, RoyaltyTooltip } from '../components/Tooltip';
 import { useNotify } from '../components/Toast';
-import { useHashdUrl } from '../hooks/useHashdUrl';
+import { useHashdUrl } from '@hashd/bytecave-browser';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 const USER_PROFILE_ADDRESS = process.env.REACT_APP_USER_PROFILE || '';

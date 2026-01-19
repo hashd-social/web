@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useByteCaveClient } from './useByteCaveClient';
+import { useByteCaveContext } from '@hashd/bytecave-browser';
 import { ethers } from 'ethers';
 
 interface UploadOptions {
@@ -32,7 +32,7 @@ const DEFAULT_MAX_SIZE_MB = 5;
 const DEFAULT_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
 
 export const useByteCaveUpload = () => {
-  const { client, isConnected } = useByteCaveClient();
+  const { store, isConnected } = useByteCaveContext();
   const [uploadState, setUploadState] = useState<UploadState>({
     isUploading: false,
     progress: 0,
@@ -75,8 +75,8 @@ export const useByteCaveUpload = () => {
     file: File,
     options: UploadOptions = {}
   ): Promise<UploadResult> => {
-    // Check if client is available
-    if (!client || !isConnected) {
+    // Check if connected
+    if (!isConnected) {
       const error = 'ByteCave P2P client not connected. Please wait for connection.';
       setUploadState({ isUploading: false, progress: 0, error });
       return { success: false, error };
@@ -117,11 +117,11 @@ export const useByteCaveUpload = () => {
         console.warn('[ByteCaveUpload] Could not get signer, uploading without authorization:', err);
       }
 
-      // Upload via P2P using ByteCave client
+      // Upload via P2P using ByteCave store function
       console.log('[ByteCaveUpload] Step 3: Starting P2P upload...', file.name, 'Size:', file.size, 'bytes');
-      console.log('[ByteCaveUpload] Client connected:', isConnected, 'Peer count:', (client as any)?.getPeerCount?.() || 0);
+      console.log('[ByteCaveUpload] Client connected:', isConnected);
       
-      const result = await (client as any).store(data, file.type, signer);
+      const result = await store(data, file.type, signer);
       
       console.log('[ByteCaveUpload] Step 4: P2P store returned:', result);
 
@@ -161,7 +161,7 @@ export const useByteCaveUpload = () => {
       setUploadState({ isUploading: false, progress: 0, error: errorMessage });
       return { success: false, error: errorMessage };
     }
-  }, [client, isConnected, validateFile]);
+  }, [store, isConnected, validateFile]);
 
   const uploadImage = useCallback(async (
     file: File,

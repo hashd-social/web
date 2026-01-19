@@ -1338,7 +1338,7 @@
 
 "@hashd/bytecave-browser@github:hashd-social/bytecave-browser#main":
   version "1.0.0"
-  resolved "https://codeload.github.com/hashd-social/bytecave-browser/tar.gz/5f9063ea35b7a2fb1bed0334af32f0a48590a373"
+  resolved "https://codeload.github.com/hashd-social/bytecave-browser/tar.gz/78beedc30e25ac4ef8345b9ecae3f9a91b4947a3"
   dependencies:
     "@chainsafe/libp2p-noise" "^17.0.0"
     "@chainsafe/libp2p-yamux" "^8.0.1"
