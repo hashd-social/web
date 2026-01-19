@@ -8,6 +8,7 @@ import { PageHeader } from '../components/PageHeader';
 import { TabBar, Tab } from '../components/TabBar';
 import { Tooltip, RoyaltyTooltip } from '../components/Tooltip';
 import { useNotify } from '../components/Toast';
+import { useHashdUrl } from '../hooks/useHashdUrl';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 const USER_PROFILE_ADDRESS = process.env.REACT_APP_USER_PROFILE || '';
@@ -49,6 +50,10 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
   const [joinedGroupAddresses, setJoinedGroupAddresses] = useState<Set<string>>(new Set());
   const [joiningGroups, setJoiningGroups] = useState<Set<string>>(new Set());
   const [copiedAddresses, setCopiedAddresses] = useState<CopyState>({});
+  
+  const { blobUrl: testImageSrc, loading: testImageLoading, error: testImageError } = useHashdUrl(
+    'hashd://106c6954cd7ebd8e1170d37119d505823aa323284ed97d184c210ef9fb73cb69'
+  );
 
   useEffect(() => {
     loadGroups();
@@ -408,6 +413,13 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
             </div>
             <h3 className="text-lg font-semibold neon-text-cyan mb-2">No guilds yet</h3>
             <p className="text-gray-400 mb-4">Be the first to create a guild!</p>
+            {testImageLoading ? (
+              <div className="text-cyan-400/50 mb-4">Loading image from ByteCave...</div>
+            ) : testImageError ? (
+              <div className="text-red-400/50 mb-4">Error: {testImageError}</div>
+            ) : testImageSrc ? (
+              <img src={testImageSrc} alt="Test" className="max-w-md mx-auto mb-4" />
+            ) : null}
             <button
               onClick={onCreateClick}
               className="cyber-button relative inline-flex items-center gap-2 px-6 py-3 overflow-hidden"

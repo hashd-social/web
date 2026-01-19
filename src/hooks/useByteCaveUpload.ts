@@ -40,13 +40,27 @@ export const useByteCaveUpload = () => {
   });
 
   const validateFile = useCallback((file: File, options: UploadOptions = {}): string | null => {
-    const maxSizeMB = options.maxSizeMB || DEFAULT_MAX_SIZE_MB;
-    const allowedTypes = options.allowedTypes || DEFAULT_ALLOWED_TYPES;
+    // Hard limit: 5MB maximum file size
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    const maxSize = Math.min(options.maxSizeMB ? options.maxSizeMB * 1024 * 1024 : MAX_FILE_SIZE, MAX_FILE_SIZE);
+    
+    const allowedTypes = options.allowedTypes || [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'video/mp4',
+      'video/webm',
+      'application/pdf'
+    ];
 
-    // Check file size
-    const maxSizeBytes = maxSizeMB * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      return `File size exceeds ${maxSizeMB}MB limit`;
+    // Check file size (5MB hard limit)
+    if (file.size > MAX_FILE_SIZE) {
+      return `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of 5MB`;
+    }
+
+    if (file.size > maxSize) {
+      return `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum ${(maxSize / 1024 / 1024).toFixed(0)}MB`;
     }
 
     // Check file type
@@ -88,20 +102,28 @@ export const useByteCaveUpload = () => {
       }
       setUploadState(prev => ({ ...prev, progress: 30 }));
 
+      console.log('[ByteCaveUpload] Step 1: File read complete, size:', data.length, 'bytes');
+
       // Get signer from MetaMask for authorization
       let signer;
       try {
+        console.log('[ByteCaveUpload] Step 2: Getting MetaMask signer...');
         if (typeof window !== 'undefined' && (window as any).ethereum) {
           const provider = new ethers.BrowserProvider((window as any).ethereum);
           signer = await provider.getSigner();
+          console.log('[ByteCaveUpload] Step 2: Signer obtained:', await signer.getAddress());
         }
       } catch (err) {
         console.warn('[ByteCaveUpload] Could not get signer, uploading without authorization:', err);
       }
 
       // Upload via P2P using ByteCave client
-      console.log('[ByteCaveUpload] Uploading file via P2P:', file.name, 'Size:', file.size, 'bytes');
+      console.log('[ByteCaveUpload] Step 3: Starting P2P upload...', file.name, 'Size:', file.size, 'bytes');
+      console.log('[ByteCaveUpload] Client connected:', isConnected, 'Peer count:', (client as any)?.getPeerCount?.() || 0);
+      
       const result = await (client as any).store(data, file.type, signer);
+      
+      console.log('[ByteCaveUpload] Step 4: P2P store returned:', result);
 
       if (!result.success) {
         throw new Error(result.error || 'P2P upload failed');
