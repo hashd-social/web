@@ -157,3 +157,5 @@ out_forge/
 blockchain_data/
 geth/
 /.env.local
+
+AGENTS.md

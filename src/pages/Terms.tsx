@@ -58,7 +58,7 @@ export const Terms: React.FC = () => {
             <ul className="text-gray-300 font-mono leading-relaxed space-y-2 list-disc list-inside">
               <li>Smart contracts deployed on MegaETH</li>
               <li>Open-source client software</li>
-              <li>Decentralized storage via IPFS</li>
+              <li>Decentralized storage via ByteCave</li>
             </ul>
             <p className="text-gray-300 font-mono leading-relaxed mt-4">
               We provide access to the protocol, but we don't control it. Once deployed, the smart contracts 

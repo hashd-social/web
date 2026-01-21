@@ -11,16 +11,20 @@ import { useByteCaveUpload } from '../hooks/useByteCaveUpload';
 
 interface ImageUploadProps {
   onImageUploaded: (url: string, cid: string) => void;
+  onFileSelected?: (file: File) => void;
   currentImageUrl?: string;
   disabled?: boolean;
   maxSizeMB?: number;
+  deferUpload?: boolean;
 }
 
 export const ImageUpload: React.FC<ImageUploadProps> = ({
   onImageUploaded,
+  onFileSelected,
   currentImageUrl,
   disabled = false,
-  maxSizeMB = 5
+  maxSizeMB = 5,
+  deferUpload = false
 }) => {
   const [preview, setPreview] = useState<string | null>(currentImageUrl || null);
   const [isDragging, setIsDragging] = useState(false);
@@ -38,6 +42,14 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     };
     reader.readAsDataURL(file);
 
+    // If deferUpload is true, just call onFileSelected and return
+    if (deferUpload) {
+      if (onFileSelected) {
+        onFileSelected(file);
+      }
+      return;
+    }
+
     // Upload to ByteCave with authorization
     const result = await uploadImage(file, {
       maxSizeMB,
@@ -49,7 +61,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     if (result.success && result.url && result.cid) {
       onImageUploaded(result.url, result.cid);
     }
-  }, [disabled, isUploading, uploadImage, maxSizeMB, onImageUploaded]);
+  }, [disabled, isUploading, uploadImage, maxSizeMB, onImageUploaded, deferUpload, onFileSelected]);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

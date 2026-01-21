@@ -116,6 +116,12 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
         address: process.env.REACT_APP_APP_REGISTRY_STORAGE || 'Not deployed',
         description: '🔒 Eternal - App registry data',
         icon: '💾'
+      },
+      {
+        name: 'ContentRegistryStorage',
+        address: process.env.REACT_APP_CONTENT_REGISTRY_STORAGE || 'Not deployed',
+        description: '🔒 Eternal - Content registry data',
+        icon: '💾'
       }
     ];
     return contracts.filter(c => c.address !== 'Not deployed');
@@ -200,6 +206,12 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
         address: process.env.REACT_APP_APP_REGISTRY || 'Not deployed',
         description: 'App registration & authorization',
         icon: '📱'
+      },
+      {
+        name: 'ContentRegistry',
+        address: process.env.REACT_APP_CONTENT_REGISTRY || 'Not deployed',
+        description: 'Content registration & verification',
+        icon: '📋'
       },
       {
         name: 'PlatformTreasury',
@@ -557,7 +569,7 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
                 <ul className="text-xs text-gray-400 font-mono space-y-1">
                   <li>• Eternal storage architecture</li>
                   <li>• Upgradeable logic contracts</li>
-                  <li>• IPFS encrypted content</li>
+                  <li>• ByteCave encrypted content</li>
                   <li>• 28-37% gas optimized</li>
                 </ul>
               </div>

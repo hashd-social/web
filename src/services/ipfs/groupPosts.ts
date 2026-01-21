@@ -110,7 +110,9 @@ export async function uploadToVault(
 ): Promise<string> {
   console.log('📤 Uploading to ByteCave vault...');
   try {
-    const cid = await vaultService.uploadGroupPost(encryptedData, groupPostsAddress);
+    // TODO: Get appId from ByteCave context
+    const appId = 'hashd';
+    const cid = await vaultService.storeGroupPost(encryptedData, groupPostsAddress, appId);
     console.log(`✅ Uploaded to vault: ${cid}`);
     return cid;
   } catch (error) {

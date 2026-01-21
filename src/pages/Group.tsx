@@ -17,6 +17,8 @@ import { contractService, NETWORK_CONFIG, GROUP_FACTORY_ABI, ERC20_ABI, ERC721_A
 import { LoadingState } from '../components/Spinner';
 import { extractColorFromImageElement } from '../utils/colorExtractor';
 import { useNotify } from '../components/Toast';
+import { GuildImage } from '../components/GuildImage';
+import { bytes32ToHashdUrl } from '../utils/cid';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 const USER_PROFILE_ADDRESS = process.env.REACT_APP_USER_PROFILE || '';
@@ -213,7 +215,7 @@ export const Group: React.FC = () => {
       setGroup({
         title: groupInfo.title,
         description: groupInfo.description,
-        imageURI: groupInfo.imageURI,
+        imageURI: bytes32ToHashdUrl(groupInfo.avatarCID),
         owner: groupInfo.owner,
         tokenAddress: groupInfo.tokenAddress,
         nftAddress: groupInfo.nftAddress,
@@ -542,21 +544,12 @@ export const Group: React.FC = () => {
               {/* Group Avatar */}
               <div className="flex-shrink-0">
                 <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden border-4 border-cyan-500/20 shadow-lg shadow-cyan-500/10">
-                  {group.imageURI ? (
-                    <img
-                      ref={avatarImgRef}
-                      src={group.imageURI}
-                      alt={group.title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Users className="w-8 h-8 text-cyan-400/50" />
-                    </div>
-                  )}
+                  <GuildImage
+                    imageURI={group.imageURI}
+                    alt={group.title}
+                    className="w-full h-full object-cover"
+                    fallbackIcon={<Users className="w-8 h-8 text-cyan-400/50" />}
+                  />
                 </div>
               </div>
 
@@ -852,8 +845,8 @@ export const Group: React.FC = () => {
                       <svg className="w-16 h-16 mx-auto text-cyan-400/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                       </svg>
-                      <p className="text-gray-300 font-medium">No HASHD Prime keys minted yet</p>
-                      <p className="text-sm text-gray-400 mt-1">Be the first to mint a HASHD Prime key!</p>
+                      <p className="text-gray-300 font-medium">No HASHD Genesis Keys minted yet</p>
+                      <p className="text-sm text-gray-400 mt-1">Be the first to mint a Genesis Key!</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -863,13 +856,10 @@ export const Group: React.FC = () => {
                           className="bg-white border border-neutral-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group"
                         >
                           <div className="aspect-square bg-gradient-to-br from-primary-100 to-blue-100 relative overflow-hidden">
-                            <img
-                              src={group.imageURI}
+                            <GuildImage
+                              imageURI={group.imageURI}
                               alt={`${group.nftName} #${holder.tokenId}`}
                               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-3">
                               <span className="text-white font-bold text-sm">#{holder.tokenId}</span>

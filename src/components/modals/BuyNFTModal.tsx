@@ -1,7 +1,7 @@
 /**
  * Buy NFT Modal
  * 
- * Modal for purchasing a HASHD Prime key NFT
+ * Modal for purchasing a HASHD Genesis Key NFT
  */
 
 import React, { useState } from 'react';
@@ -40,7 +40,7 @@ export const BuyNFTModal: React.FC<BuyNFTModalProps> = ({
     <NeonModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Mint a HASHD Prime Key"
+      title="Mint a Genesis Key"
       icon={ShoppingCart}
       maxWidth="md"
     >

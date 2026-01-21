@@ -106,7 +106,7 @@ export const FAQ: React.FC = () => {
     {
       category: 'Guilds',
       question: 'What economic features do Guilds have?',
-      answer: 'Each Guild launches with: Prime Key NFTs (100 per Guild for governance and early ownership), a native ERC-20 token, and encrypted content tiers (Public, Members, Token Holders, NFT Holders). Guilds can build their own internal economies.'
+      answer: 'Each Guild launches with: Genesis Key NFTs (100 per Guild for governance and early ownership), a native ERC-20 token, and encrypted content tiers (Public, Members, Token Holders, NFT Holders). Guilds can build their own internal economies.'
     },
     {
       category: 'Guilds',

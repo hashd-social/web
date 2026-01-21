@@ -1719,6 +1719,7 @@ function AppWithProviders() {
       <ByteCaveProvider
         contractAddress={vaultRegistry}
         rpcUrl={rpcUrl}
+        appId="hashd"
         relayPeers={relayPeers}
       >
         <App />

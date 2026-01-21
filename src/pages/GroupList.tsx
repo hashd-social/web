@@ -8,7 +8,8 @@ import { PageHeader } from '../components/PageHeader';
 import { TabBar, Tab } from '../components/TabBar';
 import { Tooltip, RoyaltyTooltip } from '../components/Tooltip';
 import { useNotify } from '../components/Toast';
-import { useHashdUrl } from '@hashd/bytecave-browser';
+import { GuildImage } from '../components/GuildImage';
+import { bytes32ToHashdUrl } from '../utils/cid';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 const USER_PROFILE_ADDRESS = process.env.REACT_APP_USER_PROFILE || '';
@@ -18,7 +19,9 @@ const EXPLORER_URL = process.env.REACT_APP_EXPLORER_URL || '';
 interface Group {
   title: string;
   description: string;
-  imageURI: string;
+  avatarCID: string;
+  headerCID: string;
+  imageURI: string; // Computed from avatarCID
   owner: string;
   tokenAddress: string;
   nftAddress: string;
@@ -50,10 +53,6 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
   const [joinedGroupAddresses, setJoinedGroupAddresses] = useState<Set<string>>(new Set());
   const [joiningGroups, setJoiningGroups] = useState<Set<string>>(new Set());
   const [copiedAddresses, setCopiedAddresses] = useState<CopyState>({});
-  
-  const { blobUrl: testImageSrc, loading: testImageLoading, error: testImageError } = useHashdUrl(
-    'hashd://106c6954cd7ebd8e1170d37119d505823aa323284ed97d184c210ef9fb73cb69'
-  );
 
   useEffect(() => {
     loadGroups();
@@ -109,7 +108,9 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
       const loadedGroups: Group[] = groupResults.map((group, i) => ({
         title: group.title,
         description: group.description,
-        imageURI: group.imageURI,
+        avatarCID: group.avatarCID,
+        headerCID: group.headerCID,
+        imageURI: bytes32ToHashdUrl(group.avatarCID), // Convert bytes32 to hashd:// URL
         owner: group.owner,
         tokenAddress: group.tokenAddress,
         nftAddress: group.nftAddress,
@@ -413,13 +414,6 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
             </div>
             <h3 className="text-lg font-semibold neon-text-cyan mb-2">No guilds yet</h3>
             <p className="text-gray-400 mb-4">Be the first to create a guild!</p>
-            {testImageLoading ? (
-              <div className="text-cyan-400/50 mb-4">Loading image from ByteCave...</div>
-            ) : testImageError ? (
-              <div className="text-red-400/50 mb-4">Error: {testImageError}</div>
-            ) : testImageSrc ? (
-              <img src={testImageSrc} alt="Test" className="max-w-md mx-auto mb-4" />
-            ) : null}
             <button
               onClick={onCreateClick}
               className="cyber-button relative inline-flex items-center gap-2 px-6 py-3 overflow-hidden"
@@ -456,20 +450,11 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
           >
             {/* Compact Group Image */}
             <div className="h-32 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden">
-              {group.imageURI ? (
-                <img
-                  src={group.imageURI}
-                  alt={group.title}
-                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <Users className="w-12 h-12 text-cyan-400/30" />
-                </div>
-              )}
+              <GuildImage
+                imageURI={group.imageURI}
+                alt={group.title}
+                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-60"></div>
               
               {/* Member count overlay */}

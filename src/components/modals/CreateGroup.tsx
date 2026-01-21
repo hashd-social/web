@@ -7,6 +7,7 @@ import { MatrixNotify } from '../MatrixNotify';
 import { Stepper, Step } from '../Stepper';
 import { ImageUpload } from '../ImageUpload';
 import { GROUP_FACTORY_ABI } from '../../utils/contracts';
+import { useByteCaveContext } from '@hashd/bytecave-browser';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 
@@ -17,12 +18,12 @@ interface CreateGroupProps {
 }
 
 export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClose, isOpen }) => {
+  const { store, isConnected } = useByteCaveContext();
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    imageURI: '',
-    imageCID: '',
+    imageFile: null as File | null,
     tokenName: '',
     tokenSymbol: '',
     nftName: '',
@@ -44,8 +45,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         setFormData({
           title: '',
           description: '',
-          imageURI: '',
-          imageCID: '',
+          imageFile: null,
           tokenName: '',
           tokenSymbol: '',
           nftName: '',
@@ -67,7 +67,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
   const canProgressFromStep = (step: number): boolean => {
     switch (step) {
       case 0: // Guild Info
-        return !!(formData.title && formData.description && formData.imageURI);
+        return !!(formData.title && formData.description && formData.imageFile);
       case 1: // Token
         return !!(formData.tokenName && formData.tokenSymbol);
       case 2: // NFT
@@ -101,8 +101,30 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         throw new Error('Please install MetaMask');
       }
 
+      if (!formData.imageFile) {
+        throw new Error('Please select an image for the guild');
+      }
+
+      if (!isConnected) {
+        throw new Error('ByteCave not connected. Please wait for P2P connection.');
+      }
+
+      console.log('Uploading image to ByteCave...');
+      
+      // Get signer first for both upload authorization and contract interaction
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      
+      // Upload image to ByteCave with authorization
+      const imageData = new Uint8Array(await formData.imageFile.arrayBuffer());
+      const uploadResult = await store(imageData, formData.imageFile.type, signer);
+
+      if (!uploadResult.success || !uploadResult.cid) {
+        throw new Error(uploadResult.error || 'Failed to upload image to ByteCave');
+      }
+
+      console.log('Image uploaded to ByteCave, CID:', uploadResult.cid);
+
       const factory = new ethers.Contract(GROUP_FACTORY_ADDRESS, GROUP_FACTORY_ABI, signer);
 
       console.log('Creating group with data:', formData);
@@ -110,10 +132,15 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
       const nftPriceWei = ethers.parseEther(formData.nftPrice);
       const maxNFTs = parseInt(formData.maxNFTs);
 
+      // Convert CID string to bytes32 format for contract storage
+      // For now, using the same CID for both avatar and header
+      const cidBytes32 = ethers.encodeBytes32String(uploadResult.cid);
+
       const tx = await factory.createGroup(
         formData.title,
         formData.description,
-        formData.imageURI,
+        cidBytes32, // avatarCID
+        cidBytes32, // headerCID (same as avatar for now)
         formData.tokenName,
         formData.tokenSymbol,
         formData.nftName,
@@ -180,8 +207,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
       setFormData({
         title: '',
         description: '',
-        imageURI: '',
-        imageCID: '',
+        imageFile: null,
         tokenName: '',
         tokenSymbol: '',
         nftName: '',
@@ -231,7 +257,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
           <div>
             <label className="text-xs font-bold neon-text-cyan uppercase tracking-wider mb-3 block font-mono flex items-center gap-2">
               <div className="w-1 h-4 bg-cyan-500 rounded-full"></div>
-              Guild Title *
+              Guild Name *
             </label>
             <input
               type="text"
@@ -252,7 +278,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-4 py-3 bg-gray-900/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 hover:border-cyan-500/50 resize-none font-mono text-sm transition-colors"
-              placeholder="Describe your guild..."
+              placeholder="Describe your Guild..."
               rows={3}
               disabled={isCreating}
             />
@@ -261,20 +287,22 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
           <div>
             <label className="text-xs font-bold neon-text-cyan uppercase tracking-wider mb-3 block font-mono flex items-center gap-2">
               <div className="w-1 h-4 bg-cyan-500 rounded-full"></div>
-              Guild Image * (also NFT image)
+              Guild Header Image
             </label>
             <ImageUpload
-              onImageUploaded={(url, cid) => {
-                setFormData({ ...formData, imageURI: url, imageCID: cid });
+              deferUpload={true}
+              onFileSelected={(file) => {
+                setFormData({ ...formData, imageFile: file });
               }}
-              currentImageUrl={formData.imageURI}
+              onImageUploaded={() => {}}
+              currentImageUrl={formData.imageFile ? URL.createObjectURL(formData.imageFile) : ''}
               disabled={isCreating}
               maxSizeMB={5}
             />
-            {formData.imageCID && (
+            {formData.imageFile && (
               <div className="mt-2 bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2">
                 <p className="text-xs text-gray-400 font-mono">
-                  <strong className="text-cyan-400">CID:</strong> {formData.imageCID}
+                  <strong className="text-cyan-400">Image:</strong> {formData.imageFile.name} ({(formData.imageFile.size / 1024).toFixed(1)} KB)
                 </p>
               </div>
             )}
@@ -343,13 +371,13 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         <div className="space-y-6">
           <div className="flex items-center gap-2 pb-2 border-b-2 border-yellow-500/30 mb-6">
             <Award className="w-5 h-5 text-yellow-400" />
-            <h4 className="text-sm font-bold text-yellow-400 uppercase font-mono">Genesis NFTs (ERC721)</h4>
+            <h4 className="text-sm font-bold text-yellow-400 uppercase font-mono">Genesis Keys (ERC721)</h4>
             <span className="text-xs text-gray-400 font-mono ml-auto">7.5% royalty</span>
           </div>
 
           <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-300 font-mono leading-relaxed">
-              You can <strong className="text-yellow-400">gift or sell</strong> HASHD Prime Keys to your guild members. Ownership enables <strong className="text-yellow-400">voting rights</strong> for the guild for things like member moderation and more.
+              You can <strong className="text-yellow-400">gift or sell</strong> Genesis Keys to your Guild members.<br/>Ownership grants certain <strong className="text-yellow-400">voting rights</strong> within the Guild.
             </p>
           </div>
           
@@ -357,14 +385,14 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
             <div>
               <label className="text-xs font-bold neon-text-cyan uppercase tracking-wider mb-3 block font-mono flex items-center gap-2">
                 <div className="w-1 h-4 bg-cyan-500 rounded-full"></div>
-                NFT Name *
+                Collection Name *
               </label>
               <input
                 type="text"
                 value={formData.nftName}
                 onChange={(e) => setFormData({ ...formData, nftName: e.target.value })}
                 className="w-full px-4 py-3 bg-gray-900/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 hover:border-cyan-500/50 font-mono text-sm transition-colors"
-                placeholder="e.g., MegaDev NFTs"
+                placeholder="e.g. MegaDev Genesis Keys"
                 disabled={isCreating}
               />
             </div>
@@ -379,7 +407,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
                 value={formData.nftSymbol}
                 onChange={(e) => setFormData({ ...formData, nftSymbol: e.target.value.toUpperCase() })}
                 className="w-full px-4 py-3 bg-gray-900/50 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 hover:border-cyan-500/50 font-mono text-sm transition-colors"
-                placeholder="e.g., MGDNFT"
+                placeholder="e.g. MDGEN"
                 maxLength={10}
                 disabled={isCreating}
               />
@@ -426,7 +454,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
 
           <div className="bg-gray-800/30 rounded-lg p-3">
             <p className="text-xs text-gray-300 font-mono">
-              <strong className="text-cyan-300">Royalty Split:</strong> 5% to you (creator), 2.5% to platform
+              <strong className="text-cyan-300">Royalty Split:</strong> 5% to you (creator), 2.5% to platform for both primary and secondary sales.
             </p>
           </div>
         </div>
@@ -455,9 +483,15 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
                 <span className="text-gray-400">Description:</span>
                 <span className="text-white font-mono text-right max-w-xs truncate">{formData.description}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Image:</span>
-                <span className="text-cyan-400 font-mono text-xs truncate max-w-xs">{formData.imageURI}</span>
+              <div className="flex justify-between align-center">
+
+          {formData.imageFile && (
+                  <div className="mt-2 bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2">
+                    <p className="text-xs text-gray-400 font-mono">
+                      <strong className="text-cyan-400">Image:</strong> {formData.imageFile.name} ({(formData.imageFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -483,7 +517,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
 
           {/* NFT Info */}
           <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-4">
-            <h5 className="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-3 font-mono">NFTs (ERC721)</h5>
+            <h5 className="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-3 font-mono">Genesis Keys (ERC721)</h5>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-400">Name:</span>

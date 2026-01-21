@@ -109,7 +109,7 @@ export const Privacy: React.FC = () => {
             </p>
             <ul className="text-gray-300 font-mono leading-relaxed space-y-2 list-disc list-inside">
               <li><strong>MegaETH:</strong> Blockchain network for smart contract execution</li>
-              <li><strong>IPFS/Filebase/Pinata:</strong> Decentralized storage for encrypted content</li>
+              <li><strong>ByteCave</strong> Decentralized storage for encrypted content</li>
               <li><strong>Wallet providers:</strong> MetaMask, WalletConnect, etc. (governed by their own privacy policies)</li>
             </ul>
             <p className="text-gray-300 font-mono leading-relaxed mt-4">

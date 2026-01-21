@@ -40,7 +40,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         {/* NFT Related Actions */}
         <div className="space-y-3">
           <button onClick={onMintNFT} className="btn btn-primary btn-block">
-            Mint a HASHD Prime Key
+            Mint a Genesis Key
           </button>
 
           {distributionSet && (
@@ -62,7 +62,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
             <h4 className="text-subtitle mb-3">Admin</h4>
             <div className="space-y-3">
               <button onClick={onGiftNFT} className="btn btn-primary btn-block">
-                Gift a HASHD Prime Key
+                Gift a HASHD Genesis Key
               </button>
               
               {!distributionSet && (

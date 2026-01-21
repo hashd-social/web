@@ -142,7 +142,7 @@ export const Stepper: React.FC<StepperProps> = ({
       <div className="flex items-center justify-between gap-3 pt-4 border-t border-cyan-500/20">
         <button
           type="button"
-          onClick={onCancel || handleBack}
+          onClick={isFirstStep ? onCancel : handleBack}
           disabled={isProcessing}
           className={`px-6 py-2.5 rounded-lg font-bold text-sm uppercase tracking-wider font-mono transition-all ${
             isFirstStep

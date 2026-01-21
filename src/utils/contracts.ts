@@ -195,9 +195,9 @@ export const SESSION_MANAGER_ABI = [
 
 export const GROUP_POSTS_ABI = [
   // Write functions
-  "function createPost(bytes32 ipfsHash, uint8 accessLevel) returns (uint256)",
+  "function createPost(bytes32 contentHash, uint8 accessLevel) returns (uint256)",
   "function deletePost(uint256 postId)",
-  "function addComment(uint256 postId, bytes32 ipfsHash) returns (uint256)",
+  "function addComment(uint256 postId, bytes32 contentHash) returns (uint256)",
   "function deleteComment(uint256 commentId)",
   
   // Vote functions
@@ -213,16 +213,16 @@ export const GROUP_POSTS_ABI = [
   
   // View functions - Batch
   // TEMPORARY: Using version WITHOUT downvotes to match deployed contract
-  "function getPostsBatch(uint256[] postIds) view returns (tuple(uint256 id, bytes32 ipfsHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)[])",
-  "function getCommentsBatch(uint256[] commentIds) view returns (tuple(uint256 id, uint256 postId, bytes32 ipfsHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted)[])",
+  "function getPostsBatch(uint256[] postIds) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)[])",
+  "function getCommentsBatch(uint256[] commentIds) view returns (tuple(uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted)[])",
   "function batchHasUpvotedPost(address user, uint256[] postIds) view returns (bool[])",
   "function batchHasUpvotedComment(address user, uint256[] commentIds) view returns (bool[])",
   
   // View functions - Single (UPDATED: optimized struct packing)
-  "function getPost(uint256 postId) view returns (tuple(uint256 id, bytes32 ipfsHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted))",
-  "function getComment(uint256 commentId) view returns (tuple(uint256 id, uint256 postId, bytes32 ipfsHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted))",
-  "function posts(uint256 postId) view returns (uint256 id, bytes32 ipfsHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)",
-  "function comments(uint256 commentId) view returns (uint256 id, uint256 postId, bytes32 ipfsHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted)",
+  "function getPost(uint256 postId) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted))",
+  "function getComment(uint256 commentId) view returns (tuple(uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted))",
+  "function posts(uint256 postId) view returns (uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)",
+  "function comments(uint256 commentId) view returns (uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted)",
   "function hasUpvotedPost(address user, uint256 postId) view returns (bool)",
   "function hasUpvotedComment(address user, uint256 commentId) view returns (bool)",
   
@@ -248,8 +248,8 @@ export const GROUP_POSTS_ABI = [
 ];
 
 export const GROUP_FACTORY_ABI = [
-  "function createGroup(string title, string description, string imageURI, string erc20Name, string erc20Symbol, string nftName, string nftSymbol, uint256 nftPrice, uint256 maxNFTs) returns (address tokenAddr, address nftAddr, address postsAddr)",
-  "function allGroups(uint256 index) view returns (string title, string description, string imageURI, address owner, address tokenAddress, address nftAddress, address postsAddress)",
+  "function createGroup(string title, string description, bytes32 avatarCID, bytes32 headerCID, string erc20Name, string erc20Symbol, string nftName, string nftSymbol, uint256 nftPrice, uint256 maxNFTs) returns (address tokenAddr, address nftAddr, address postsAddr, address commentsAddr)",
+  "function allGroups(uint256 index) view returns (string title, string description, bytes32 avatarCID, bytes32 headerCID, address owner, address tokenAddress, address nftAddress, address postsAddress)",
   "function allGroupsLength() view returns (uint256)",
   "function getGroupsForOwner(address owner) view returns (address[])",
   "function userProfile() view returns (address)",
@@ -638,7 +638,7 @@ export class ContractService {
         this.signer
       );
 
-      // Initialize MessageContractV2 (IPFS-based)
+      // Initialize MessageContract (IPFS-based)
       this.contracts.messageContract = new ethers.Contract(
         CONTRACT_ADDRESSES.MESSAGE_CONTRACT,
         MESSAGE_CONTRACT_ABI,
@@ -917,10 +917,10 @@ export class ContractService {
     return messages.filter(msg => msg !== null);
   }
 
-  // MessageContractV2: Messages stored in IPFS, retrieved via ipfs/messaging
+  // MessageContract: Messages stored in IPFS, retrieved via ipfs/messaging
   // Removed old getMessagesPaginated - use new optimized version below
 
-  // MessageContractV2 methods (IPFS-based)
+  // MessageContract methods (IPFS-based)
   async getUserMessages(address: string): Promise<{
     currentCID: string;
     lastUpdated: number;

@@ -96,7 +96,9 @@ export class IPFSService {
     const encoder = new TextEncoder();
     const threadBytes = encoder.encode(JSON.stringify(threadData));
     
-    const threadCID = await vaultService.uploadMessage(threadBytes, threadId, participants);
+    // TODO: Get appId from ByteCave context
+    const appId = 'hashd';
+    const threadCID = await vaultService.storeMessage(threadBytes, threadId, participants, appId);
     
     // Cache the new CID
     this.cacheThreadCID(threadId, threadCID);

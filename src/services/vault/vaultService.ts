@@ -17,6 +17,8 @@ export interface StorageAuthorization {
   timestamp: number;
   nonce: string;
   contentHash: string;
+  appId: string;
+  contentType: string;
   groupPostsAddress?: string;
   postId?: number;
   threadId?: string;
@@ -41,11 +43,10 @@ export interface StoreResponse {
   };
 }
 
-// Signature message format (must match vault service)
-const SIGNATURE_MESSAGE_TEMPLATE = `HASHD Vault Storage Request
-Type: {type}
+// Signature message format (must match bytecave-browser and bytecave-core)
+const SIGNATURE_MESSAGE_TEMPLATE = `ByteCave Storage Request for:
 Content Hash: {contentHash}
-Context: {context}
+App ID: {appId}
 Timestamp: {timestamp}
 Nonce: {nonce}`;
 
@@ -317,16 +318,14 @@ class VaultService {
    * Create the signature message for authorization
    */
   private createSignatureMessage(
-    type: AuthorizationType,
     contentHash: string,
-    context: string,
+    appId: string,
     timestamp: number,
     nonce: string
   ): string {
     return SIGNATURE_MESSAGE_TEMPLATE
-      .replace('{type}', type)
       .replace('{contentHash}', contentHash)
-      .replace('{context}', context)
+      .replace('{appId}', appId)
       .replace('{timestamp}', timestamp.toString())
       .replace('{nonce}', nonce);
   }
@@ -359,16 +358,19 @@ class VaultService {
   }
 
   /**
-   * Create authorization object with signature
+   * Create authorization for storage request
    */
-  async createAuthorization(
+  private async createAuthorization(
     type: AuthorizationType,
     data: Uint8Array,
+    appId: string,
     options: {
       groupPostsAddress?: string;
       postId?: number;
       threadId?: string;
       participants?: string[];
+      mediaId?: string;
+      listingId?: string;
       tokenAddress?: string;
     }
   ): Promise<StorageAuthorization> {
@@ -384,14 +386,12 @@ class VaultService {
     const timestamp = Date.now();
     const nonce = this.generateNonce();
 
-    // Get context for signature
-    const context = this.getContext(type, options);
-
-    // Create and sign message
-    const message = this.createSignatureMessage(type, contentHash, context, timestamp, nonce);
+    // Create and sign message with appId included
+    const message = this.createSignatureMessage(contentHash, appId, timestamp, nonce);
     const signature = await signer.signMessage(message);
 
     // Build authorization object
+    const vaultContentType = authTypeToContentType(type);
     const authorization: StorageAuthorization = {
       type,
       sender,
@@ -399,6 +399,8 @@ class VaultService {
       timestamp,
       nonce,
       contentHash,
+      appId: 'hashd',
+      contentType: vaultContentType
     };
 
     // Add type-specific fields
@@ -427,6 +429,7 @@ class VaultService {
   async uploadToVault(
     data: Uint8Array,
     type: AuthorizationType,
+    appId: string,
     options: {
       groupPostsAddress?: string;
       postId?: number;
@@ -434,10 +437,11 @@ class VaultService {
       participants?: string[];
       mediaId?: string;
       listingId?: string;
+      tokenAddress?: string;
     }
   ): Promise<StoreResponse> {
     // Create authorization
-    const authorization = await this.createAuthorization(type, data, options);
+    const authorization = await this.createAuthorization(type, data, appId, options);
 
     // Convert data to base64 for JSON transport
     const base64Data = btoa(Array.from(data).map(b => String.fromCharCode(b)).join(''));
@@ -518,11 +522,12 @@ class VaultService {
   /**
    * Upload a group post to vault
    */
-  async uploadGroupPost(
+  async storeGroupPost(
     encryptedData: Uint8Array,
-    groupPostsAddress: string
+    groupPostsAddress: string,
+    appId: string
   ): Promise<string> {
-    const result = await this.uploadToVault(encryptedData, 'group_post', {
+    const result = await this.uploadToVault(encryptedData, 'group_post', appId, {
       groupPostsAddress,
     });
     return result.cid;
@@ -531,12 +536,13 @@ class VaultService {
   /**
    * Upload a group comment to vault
    */
-  async uploadGroupComment(
+  async storeGroupComment(
     encryptedData: Uint8Array,
     groupPostsAddress: string,
-    postId: number
+    postId: number,
+    appId: string
   ): Promise<string> {
-    const result = await this.uploadToVault(encryptedData, 'group_comment', {
+    const result = await this.uploadToVault(encryptedData, 'group_comment', appId, {
       groupPostsAddress,
       postId,
     });
@@ -546,12 +552,13 @@ class VaultService {
   /**
    * Upload a message thread file to vault
    */
-  async uploadMessage(
+  async storeMessage(
     encryptedData: Uint8Array,
     threadId: string,
-    participants: string[]
+    participants: string[],
+    appId: string
   ): Promise<string> {
-    const result = await this.uploadToVault(encryptedData, 'message', {
+    const result = await this.uploadToVault(encryptedData, 'message', appId, {
       threadId,
       participants,
     });
@@ -561,11 +568,12 @@ class VaultService {
   /**
    * Upload media to vault (images, profile pics, etc.)
    */
-  async uploadMedia(
+  async storeMedia(
     data: Uint8Array,
-    mediaId: string
+    mediaId: string,
+    appId: string
   ): Promise<string> {
-    const result = await this.uploadToVault(data, 'media', {
+    const result = await this.uploadToVault(data, 'media', appId, {
       mediaId,
     });
     return result.cid;
@@ -574,11 +582,12 @@ class VaultService {
   /**
    * Upload marketplace listing to vault
    */
-  async uploadListing(
+  async storeListing(
     data: Uint8Array,
-    listingId: string
+    listingId: string,
+    appId: string
   ): Promise<string> {
-    const result = await this.uploadToVault(data, 'listing', {
+    const result = await this.uploadToVault(data, 'listing', appId, {
       listingId,
     });
     return result.cid;
