@@ -7,7 +7,7 @@ import { MatrixNotify } from '../MatrixNotify';
 import { Stepper, Step } from '../Stepper';
 import { ImageUpload } from '../ImageUpload';
 import { GROUP_FACTORY_ABI } from '../../utils/contracts';
-import { useByteCaveContext } from '@hashd/bytecave-browser';
+import { useByteCaveContext } from '@hashd-social/bytecave-browser';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 
@@ -18,7 +18,7 @@ interface CreateGroupProps {
 }
 
 export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClose, isOpen }) => {
-  const { store, isConnected } = useByteCaveContext();
+  const { store, registerContent, isConnected, connect, connectionState, peers } = useByteCaveContext();
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
     title: '',
@@ -105,11 +105,27 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         throw new Error('Please select an image for the guild');
       }
 
-      if (!isConnected) {
-        throw new Error('ByteCave not connected. Please wait for P2P connection.');
+      // Ensure ByteCave is connected
+      if (!isConnected || connectionState !== 'connected') {
+        console.log('ByteCave not connected, attempting to connect...');
+        console.log('Connection state:', connectionState, 'Peers:', peers.length);
+        
+        try {
+          await connect();
+          // Wait a moment for peers to be discovered
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (connectError: any) {
+          throw new Error(`Failed to connect to ByteCave: ${connectError.message}`);
+        }
+      }
+
+      // Verify we have storage peers
+      if (peers.length === 0) {
+        throw new Error('No storage peers available. Please ensure ByteCave nodes are running and connected to the relay.');
       }
 
       console.log('Uploading image to ByteCave...');
+      console.log('Connected peers:', peers.length);
       
       // Get signer first for both upload authorization and contract interaction
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -124,6 +140,16 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
       }
 
       console.log('Image uploaded to ByteCave, CID:', uploadResult.cid);
+
+      // Register content in ContentRegistry (on-chain)
+      console.log('Registering content in ContentRegistry...');
+      const registrationResult = await registerContent(uploadResult.cid, 'hashd', signer);
+      
+      if (!registrationResult.success) {
+        throw new Error(`ContentRegistry registration failed: ${registrationResult.error}`);
+      }
+      
+      console.log('Content registered in ContentRegistry, tx hash:', registrationResult.txHash);
 
       const factory = new ethers.Contract(GROUP_FACTORY_ADDRESS, GROUP_FACTORY_ABI, signer);
 

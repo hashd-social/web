@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { ByteCaveClient } from '@hashd/bytecave-browser';
+import { ByteCaveClient } from '@hashd-social/bytecave-browser';
 
 interface UseByteCaveClientReturn {
   client: ByteCaveClient | null;

@@ -1336,9 +1336,10 @@
   resolved "https://registry.yarnpkg.com/@eslint/js/-/js-8.57.1.tgz#de633db3ec2ef6a3c89e2f19038063e8a122e2c2"
   integrity sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==
 
-"@hashd/bytecave-browser@github:hashd-social/bytecave-browser#main":
+"@hashd-social/bytecave-browser@^1.0.0":
   version "1.0.0"
-  resolved "https://codeload.github.com/hashd-social/bytecave-browser/tar.gz/acdb67b6cf499810acdf04ab8a0686c7d73ed205"
+  resolved "https://registry.yarnpkg.com/@hashd-social/bytecave-browser/-/bytecave-browser-1.0.0.tgz#987b57ebd7f7078a75a5469e49d0bc6c51254ff6"
+  integrity sha512-0R17MR5EXTxI/6KMYCzYeDEsdE3Ri4EalbEOkeCX/W8CsbxIfUOCXxARBuii1Sasp7WN7unb2DkOENkFK7y8QA==
   dependencies:
     "@chainsafe/libp2p-noise" "^17.0.0"
     "@chainsafe/libp2p-yamux" "^8.0.1"
@@ -1353,9 +1354,10 @@
     libp2p "^3.1.2"
     uint8arrays "^5.0.0"
 
-"@hashd/components@https://github.com/hashd-social/components.git":
+"@hashd-social/components@^1.0.0":
   version "1.0.0"
-  resolved "https://github.com/hashd-social/components.git#98d01fc358f99d28e28ae849bef03044b75cee33"
+  resolved "https://registry.yarnpkg.com/@hashd-social/components/-/components-1.0.0.tgz#32b958be77e6897b06f5649fc7c0f44ae0e84525"
+  integrity sha512-hzKRqoQ9VL6mE08Tj9RHwmf+G4yMUE0cKa9cpqIYlOPCsnuMGx5OwViLyjq5szlZ+xBpgGDqWSFGrfh9xwD01A==
   dependencies:
     lucide-react "^0.460.0"
     react "^18.2.0"
@@ -4103,9 +4105,9 @@ case-sensitive-paths-webpack-plugin@^2.4.0:
   integrity sha512-roIFONhcxog0JSSWbvVAh3OocukmSgpqOH6YpMkCvav/ySIV3JKg4Dc8vYtQjYi/UxpNE36r/9v+VqTQqgkYmw==
 
 cborg@^4.2.14:
-  version "4.5.5"
-  resolved "https://registry.yarnpkg.com/cborg/-/cborg-4.5.5.tgz#a86a5ce764d3b7e08baf6e7c292c2741a60fc15a"
-  integrity sha512-Vf79xRZWRxzzwNBC+VPvMftaMJdCLPzTEyy68ZDEpGXAPmXDkcO9Ate2jJcc9tRR8K9sSlb0doddfgw3BTeRLQ==
+  version "4.5.8"
+  resolved "https://registry.yarnpkg.com/cborg/-/cborg-4.5.8.tgz#49cf664711237e4eb6197c841a2de79163e58c62"
+  integrity sha512-6/viltD51JklRhq4L7jC3zgy6gryuG5xfZ3kzpE+PravtyeQLeQmCYLREhQH7pWENg5pY4Yu/XCd6a7dKScVlw==
 
 chalk@^2.4.1:
   version "2.4.2"
