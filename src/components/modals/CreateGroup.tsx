@@ -7,7 +7,7 @@ import { MatrixNotify } from '../MatrixNotify';
 import { Stepper, Step } from '../Stepper';
 import { ImageUpload } from '../ImageUpload';
 import { GROUP_FACTORY_ABI } from '../../utils/contracts';
-import { useByteCaveContext } from '@hashd-social/bytecave-browser';
+import { useByteCaveContext } from '@gethashd/bytecave-browser';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 

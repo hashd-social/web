@@ -28,7 +28,7 @@ import { LoadingState } from './components/Spinner';
 import { MailboxSwitcher } from './components/modals/MailboxSwitcher';
 import { ForceMailboxSelection } from './components/modals/ForceMailboxSelection';
 import { ToastProvider, toast } from './components/Toast';
-import { ByteCaveProvider } from '@hashd-social/bytecave-browser';
+import { ByteCaveProvider } from '@gethashd/bytecave-browser';
 import { PasskeyLockScreen } from './components/PasskeyLockScreen';
 import { hasPasskey } from './services/passkeyService';
 import { Waitlist } from './pages/Waitlist';

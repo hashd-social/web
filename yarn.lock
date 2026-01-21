@@ -1336,10 +1336,10 @@
   resolved "https://registry.yarnpkg.com/@eslint/js/-/js-8.57.1.tgz#de633db3ec2ef6a3c89e2f19038063e8a122e2c2"
   integrity sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==
 
-"@hashd-social/bytecave-browser@^1.0.0":
+"@gethashd/bytecave-browser@^1.0.0":
   version "1.0.0"
-  resolved "https://registry.yarnpkg.com/@hashd-social/bytecave-browser/-/bytecave-browser-1.0.0.tgz#987b57ebd7f7078a75a5469e49d0bc6c51254ff6"
-  integrity sha512-0R17MR5EXTxI/6KMYCzYeDEsdE3Ri4EalbEOkeCX/W8CsbxIfUOCXxARBuii1Sasp7WN7unb2DkOENkFK7y8QA==
+  resolved "https://registry.yarnpkg.com/@gethashd/bytecave-browser/-/bytecave-browser-1.0.0.tgz#a8b7cb0cb3aff5913b3b481000786c13aa62efec"
+  integrity sha512-s0tqIdgALIcDLRj6erGhVK33ARd9l4GwEM4DqpKKO28rV78VGVS67ye/dV9FBXIME7QcXuEnP1R2jAkSyiS6Kw==
   dependencies:
     "@chainsafe/libp2p-noise" "^17.0.0"
     "@chainsafe/libp2p-yamux" "^8.0.1"
@@ -1354,10 +1354,10 @@
     libp2p "^3.1.2"
     uint8arrays "^5.0.0"
 
-"@hashd-social/components@^1.0.0":
+"@gethashd/components@^1.0.0":
   version "1.0.0"
-  resolved "https://registry.yarnpkg.com/@hashd-social/components/-/components-1.0.0.tgz#32b958be77e6897b06f5649fc7c0f44ae0e84525"
-  integrity sha512-hzKRqoQ9VL6mE08Tj9RHwmf+G4yMUE0cKa9cpqIYlOPCsnuMGx5OwViLyjq5szlZ+xBpgGDqWSFGrfh9xwD01A==
+  resolved "https://registry.yarnpkg.com/@gethashd/components/-/components-1.0.0.tgz#596aad40adf9a041bd1c01e398ac36f1907e1292"
+  integrity sha512-/bm0/OBMqa/vbM7sHO/ezbmMPxq4aMbN+SHrCYXfJGu+As/8p4HOLaQMs7jz/iptv1NJ3G/pLSgKxstoAHufOw==
   dependencies:
     lucide-react "^0.460.0"
     react "^18.2.0"

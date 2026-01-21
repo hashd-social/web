@@ -1,5 +1,5 @@
 import React from 'react';
-import { useHashdUrl } from '@hashd-social/bytecave-browser';
+import { useHashdUrl } from '@gethashd/bytecave-browser';
 import { Users } from 'lucide-react';
 
 interface GuildImageProps {

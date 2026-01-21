@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useByteCaveContext } from '@hashd-social/bytecave-browser';
+import { useByteCaveContext } from '@gethashd/bytecave-browser';
 import { ethers } from 'ethers';
 
 interface UploadOptions {
