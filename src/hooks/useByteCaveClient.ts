@@ -57,7 +57,7 @@ export const useByteCaveClient = (): UseByteCaveClientReturn => {
       initializationPromise = (async () => {
         try {
           const relayPeersEnv = process.env.REACT_APP_RELAY_PEERS || '';
-          const contractAddress = process.env.REACT_APP_VAULT_REGISTRY || '';
+          const vaultNodeRegistryAddress = process.env.REACT_APP_VAULT_REGISTRY || '';
           const rpcUrl = process.env.REACT_APP_RPC_URL || 'http://localhost:8545';
 
           const relayPeers = relayPeersEnv 
@@ -72,8 +72,8 @@ export const useByteCaveClient = (): UseByteCaveClientReturn => {
 
           globalClient = new ByteCaveClient({
             relayPeers,
-            contractAddress: contractAddress || undefined,
-            rpcUrl: contractAddress ? rpcUrl : undefined,
+            vaultNodeRegistryAddress: vaultNodeRegistryAddress || undefined,
+            rpcUrl: vaultNodeRegistryAddress ? rpcUrl : undefined,
             maxPeers: 10,
             connectionTimeout: 30000
           });
