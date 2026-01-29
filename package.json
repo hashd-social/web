@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@gethashd/bytecave-browser": "1.0.63",
+    "@gethashd/bytecave-browser": "1.0.64",
     "@gethashd/components": "^1.0.0",
     "@noble/curves": "^2.0.1",
     "@tailwindcss/forms": "^0.5.10",

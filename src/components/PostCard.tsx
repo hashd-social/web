@@ -78,10 +78,9 @@ export default function PostCard({
   }, [contentHash, groupKey]);
 
   // Check if user has access to view this post
-  // Hierarchy: NFT Holders > Token Holders > Members > Public
+  // Access is determined by the post's access level setting
   const canView = () => {
     if (isAuthor) return true; // Authors can always view their own posts
-    if (hasNFT) return true; // NFT holders can view ALL posts (top tier)
     
     switch (accessLevel) {
       case AccessLevel.PUBLIC:
@@ -89,9 +88,9 @@ export default function PostCard({
       case AccessLevel.MEMBERS_ONLY:
         return isMember; // Must be a member
       case AccessLevel.TOKEN_HOLDERS:
-        return hasToken; // Must hold tokens
+        return hasToken; // Must hold ERC20 tokens
       case AccessLevel.NFT_HOLDERS:
-        return false; // Already checked hasNFT above
+        return hasNFT; // Must hold ERC721 NFT
       default:
         return false;
     }
@@ -367,7 +366,7 @@ export default function PostCard({
             <img
               src={content.image}
               alt="Post content"
-              className="max-w-[600px] w-full h-auto object-contain cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
+              className="max-w-[400px] w-full h-auto object-contain cursor-pointer hover:opacity-90 transition-opacity rounded-lg"
               onClick={() => setShowImageModal(true)}
             />
           </div>

@@ -1106,7 +1106,11 @@ export const Group: React.FC = () => {
             await tx.wait();
             console.log('✅ Post created on-chain!');
             
-            // Increment post count to trigger refresh
+            // Don't refresh here - wait for ByteCave upload to complete
+            // Refresh will be triggered by onComplete callback after ByteCave storage
+          }}
+          onComplete={() => {
+            console.log('🔄 Post fully created, refreshing feed...');
             setPostCount(prev => prev + 1);
           }}
         />

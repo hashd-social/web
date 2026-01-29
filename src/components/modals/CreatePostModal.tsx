@@ -14,6 +14,7 @@ interface CreatePostModalProps {
   hasToken?: boolean;
   isMember?: boolean;
   onPostCreated: (contentHash: string, accessLevel: number) => Promise<void>;
+  onComplete?: () => void;
   relayerUrl?: string;
   hashIdToken?: string;
 }
@@ -29,6 +30,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   hasToken = false,
   isMember = false,
   onPostCreated,
+  onComplete,
   relayerUrl,
   hashIdToken
 }) => {
@@ -62,7 +64,12 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           hasToken={hasToken}
           isMember={isMember}
           onPostCreated={handlePostCreated}
-          onComplete={onClose}
+          onComplete={() => {
+            onClose();
+            if (onComplete) {
+              onComplete();
+            }
+          }}
           relayerUrl={relayerUrl}
           hashIdToken={hashIdToken}
         />

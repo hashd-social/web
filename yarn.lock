@@ -1336,10 +1336,10 @@
   resolved "https://registry.yarnpkg.com/@eslint/js/-/js-8.57.1.tgz#de633db3ec2ef6a3c89e2f19038063e8a122e2c2"
   integrity sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==
 
-"@gethashd/bytecave-browser@1.0.63":
-  version "1.0.63"
-  resolved "https://registry.yarnpkg.com/@gethashd/bytecave-browser/-/bytecave-browser-1.0.63.tgz#8213ef54f88d63957f8ee6637b98e525643c5235"
-  integrity sha512-4Be8PWEG6lieDbSm3GLI98gFzJHFISdvtT6A72bDBWX/VZrvQCs8CREJWqf42Iv+YrCjzuJW0G6gBsL6WSq09w==
+"@gethashd/bytecave-browser@1.0.64":
+  version "1.0.64"
+  resolved "https://registry.yarnpkg.com/@gethashd/bytecave-browser/-/bytecave-browser-1.0.64.tgz#450bb31acfc412da1f602ca5caa99ae44105b334"
+  integrity sha512-OTcDhCmf8o5W8dM7BtS+fKeeoGpFVm/IwhuftHVR5jBbMK5LcTE+5j7pJpiXIuEG42JP7kGnVe6v8KqibfTKaw==
   dependencies:
     "@chainsafe/libp2p-noise" "^17.0.0"
     "@chainsafe/libp2p-yamux" "^8.0.1"

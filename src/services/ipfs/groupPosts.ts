@@ -1,17 +1,22 @@
 import { ethers } from 'ethers';
-import { getVaultPrimaryNode } from '../../store/settingsStore';
-import { vaultService } from '../vault';
 import { cidToBytes32, bytes32ToCid } from '../../utils/contracts';
 
 /**
  * Group Posts Storage Service
  * Handles encryption, upload, download, and decryption of group post content
  * 
- * Storage: Uses ByteCave vault nodes with on-chain authorization
+ * Storage: Uses ByteCave P2P via @gethashd/bytecave-browser
  */
 
-// Helper to get current vault node URL
-const getVaultUrl = () => getVaultPrimaryNode();
+// Get ByteCave retrieve function from window context
+// This is set by ByteCaveProvider in App.tsx
+const getByteCaveRetrieve = () => {
+  const context = (window as any).__BYTECAVE_CONTEXT__;
+  if (!context?.retrieve) {
+    throw new Error('ByteCave not initialized. Ensure ByteCaveProvider is mounted.');
+  }
+  return context.retrieve;
+};
 
 export interface PostContent {
   title: string;
@@ -101,41 +106,37 @@ export async function decryptContent(
 }
 
 /**
- * Upload encrypted content to ByteCave vault
+ * Upload encrypted content to ByteCave
+ * NOTE: This is now handled directly in CreatePost.tsx using bytecave-browser's store()
+ * This function is kept for backward compatibility but should not be used for new code
  */
 export async function uploadToVault(
   encryptedData: Uint8Array,
   userAddress: string,
   groupPostsAddress: string
 ): Promise<string> {
-  console.log('📤 Uploading to ByteCave vault...');
-  try {
-    // TODO: Get appId from ByteCave context
-    const appId = 'hashd';
-    const cid = await vaultService.storeGroupPost(encryptedData, groupPostsAddress, appId);
-    console.log(`✅ Uploaded to vault: ${cid}`);
-    return cid;
-  } catch (error) {
-    console.error('Vault upload error:', error);
-    throw error;
-  }
+  throw new Error('uploadToVault is deprecated. Use bytecave-browser store() directly in components.');
 }
 
 // Legacy alias for backward compatibility
 export const uploadToIPFS = uploadToVault;
 
 /**
- * Download content from ByteCave vault
+ * Download content from ByteCave using bytecave-browser
+ * NOTE: This uses the global ByteCave context from @gethashd/bytecave-browser
+ * Components should use useHashdUrl hook for automatic retrieval
  */
 export async function downloadFromVault(cid: string): Promise<Uint8Array> {
-  try {
-    console.log('📥 Downloading from ByteCave vault:', cid);
-    const data = await vaultService.getBlobWithFallback(cid);
-    return data;
-  } catch (error) {
-    console.error('Vault download error:', error);
-    throw error;
+  const retrieve = getByteCaveRetrieve();
+  
+  console.log('📥 Downloading from ByteCave P2P:', cid);
+  const result = await retrieve(cid);
+  
+  if (!result.success || !result.data) {
+    throw new Error(result.error || 'Failed to retrieve content from ByteCave');
   }
+  
+  return result.data;
 }
 
 // Legacy alias for backward compatibility
@@ -226,9 +227,10 @@ export function deriveGroupKey(groupTokenAddress: string, accessLevel: AccessLev
 
 /**
  * Get ByteCave gateway URL for viewing content
+ * NOTE: With P2P, we use hashd:// URLs instead of HTTP gateways
  */
 export function getVaultGatewayUrl(cid: string): string {
-  return `${getVaultUrl()}/blob/${cid}`;
+  return `hashd://${cid}`;
 }
 
 // Legacy alias for backward compatibility

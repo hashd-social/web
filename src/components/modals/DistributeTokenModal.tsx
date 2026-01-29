@@ -610,12 +610,12 @@ export const DistributeTokenModal: React.FC<DistributeTokenModalProps> = ({
                 Download Distribution Data
               </button>
               
-              <button
+              {/* <button
                 onClick={onClose}
                 className="block w-full mt-4 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 Close
-              </button>
+              </button> */}
             </div>
           ) : (
             <>

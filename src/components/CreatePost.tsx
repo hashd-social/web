@@ -267,21 +267,18 @@ export default function CreatePost({
       updateStep(3, 'active', 'Finalizing...');
       updateStep(3, 'complete', 'Post published successfully!');
 
-      // Wait a moment to show completion before modal closes
-      setTimeout(() => {
-        // Reset form
-        setText('');
-        setTitle('');
-        setImage(null);
-        setAccessLevel(AccessLevel.MEMBERS_ONLY);
-        setShowProgress(false);
-        setProgressSteps([]);
-        
-        // Notify parent that everything is complete
-        if (onComplete) {
-          onComplete();
-        }
-      }, 2000);
+      // Reset form
+      setText('');
+      setTitle('');
+      setImage(null);
+      setAccessLevel(AccessLevel.MEMBERS_ONLY);
+      setShowProgress(false);
+      setProgressSteps([]);
+      
+      // Notify parent that everything is complete - this will close modal and refresh feed
+      if (onComplete) {
+        onComplete();
+      }
     } catch (err) {
       console.error('Error creating post:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to create post';

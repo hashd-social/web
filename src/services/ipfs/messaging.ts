@@ -1,6 +1,13 @@
-import { getVaultPrimaryNode } from '../../store/settingsStore';
 import { contractService, bytes32ToCid } from '../../utils/contracts';
-import { vaultService } from '../vault';
+
+// Get ByteCave retrieve function from window context
+const getByteCaveContext = () => {
+  const context = (window as any).__BYTECAVE_CONTEXT__;
+  if (!context) {
+    throw new Error('ByteCave not initialized. Ensure ByteCaveProvider is mounted.');
+  }
+  return context;
+};
 
 interface Message {
   messageId: number;
@@ -44,11 +51,15 @@ export class IPFSService {
   async getUserMessages(userAddress: string, cid?: string): Promise<UserMessageFile> {
     if (cid) {
       try {
-        const data = await vaultService.getBlobWithFallback(cid);
-        const decoder = new TextDecoder();
-        return JSON.parse(decoder.decode(data));
+        const { retrieve } = getByteCaveContext();
+        const result = await retrieve(cid);
+        if (result.success && result.data) {
+          const decoder = new TextDecoder();
+          return JSON.parse(decoder.decode(result.data));
+        }
+        throw new Error(result.error || 'Failed to retrieve');
       } catch (err) {
-        console.error('Failed to fetch from vault:', err);
+        console.error('Failed to fetch from ByteCave:', err);
       }
     }
     
@@ -92,13 +103,21 @@ export class IPFSService {
     threadData.version++;
     threadData.lastUpdated = Date.now();
     
-    // Encrypt and upload to vault
+    // Encrypt and upload to ByteCave
     const encoder = new TextEncoder();
     const threadBytes = encoder.encode(JSON.stringify(threadData));
     
-    // TODO: Get appId from ByteCave context
-    const appId = 'hashd';
-    const threadCID = await vaultService.storeMessage(threadBytes, threadId, participants, appId);
+    // Store via ByteCave P2P
+    const { store } = getByteCaveContext();
+    const provider = new (await import('ethers')).ethers.BrowserProvider((window as any).ethereum);
+    const signer = await provider.getSigner();
+    const storeResult = await store(threadBytes, 'application/json', signer);
+    
+    if (!storeResult.success || !storeResult.cid) {
+      throw new Error(storeResult.error || 'Failed to store thread');
+    }
+    
+    const threadCID = storeResult.cid;
     
     // Cache the new CID
     this.cacheThreadCID(threadId, threadCID);
@@ -195,9 +214,15 @@ export class IPFSService {
    * Fetch thread directly from vault by CID
    */
   async getThreadByCID(cid: string): Promise<any> {
-    const data = await vaultService.getBlobWithFallback(cid);
+    const { retrieve } = getByteCaveContext();
+    const result = await retrieve(cid);
+    
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Failed to retrieve thread');
+    }
+    
     const decoder = new TextDecoder();
-    return JSON.parse(decoder.decode(data));
+    return JSON.parse(decoder.decode(result.data));
   }
 
   /**
