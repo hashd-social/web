@@ -1712,6 +1712,7 @@ function AppWithProviders() {
   const vaultRegistry = process.env.REACT_APP_VAULT_REGISTRY || '';
   const contentRegistry = process.env.REACT_APP_CONTENT_REGISTRY || '';
   const rpcUrl = process.env.REACT_APP_RPC_URL || 'http://localhost:8545';
+  const relayWsUrl = process.env.REACT_APP_RELAY_WS_URL || 'ws://localhost:4003';
   const relayPeersEnv = process.env.REACT_APP_RELAY_PEERS || '';
   const relayPeers = relayPeersEnv ? relayPeersEnv.split(',').map(p => p.trim()).filter(Boolean) : [];
 
@@ -1721,6 +1722,7 @@ function AppWithProviders() {
         vaultNodeRegistryAddress={vaultRegistry}
         contentRegistryAddress={contentRegistry}
         rpcUrl={rpcUrl}
+        relayWsUrl={relayWsUrl}
         appId="hashd"
         relayPeers={relayPeers}
       >

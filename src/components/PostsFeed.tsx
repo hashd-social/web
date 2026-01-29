@@ -46,6 +46,7 @@ export default function PostsFeed({
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [upvotedPosts, setUpvotedPosts] = useState<Set<number>>(new Set());
+  const [failedPosts, setFailedPosts] = useState<Set<number>>(new Set());
   const [page, setPage] = useState(0);
   const [totalPosts, setTotalPosts] = useState(0);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -114,43 +115,6 @@ export default function PostsFeed({
     
     try {
       setIsLoading(true);
-      
-      // Diagnostic: Check contract state
-      try {
-        const provider = contractService.getReadProvider();
-        const groupPostsContract = new ethers.Contract(
-          groupPostsAddress,
-          [
-            'function isAuthorizedInStorage() view returns (bool)',
-            'function postStorage() view returns (address)',
-            'function getPost(uint256) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted))'
-          ],
-          provider
-        );
-        
-        console.log('🔍 === DIAGNOSTIC START ===');
-        const isAuthorized = await groupPostsContract.isAuthorizedInStorage();
-        const postStorageAddr = await groupPostsContract.postStorage();
-        console.log('🔐 GroupPosts authorized in PostStorage:', isAuthorized);
-        console.log('📦 PostStorage address:', postStorageAddr);
-        
-        // Try to fetch a single post to see if it works
-        try {
-          const singlePost = await groupPostsContract.getPost(1);
-          console.log('✅ Single post fetch works:', singlePost);
-        } catch (singleErr: any) {
-          console.error('❌ Single post fetch FAILED:', singleErr.message);
-        }
-        
-        if (!isAuthorized) {
-          console.error('⚠️ ⚠️ ⚠️ CRITICAL: GroupPosts is NOT authorized in PostStorage!');
-          console.error('This WILL cause getPostsBatch to return malformed data.');
-          console.error('Solution: Owner must call: postStorage.authorizeContract(' + groupPostsAddress + ')');
-        }
-        console.log('🔍 === DIAGNOSTIC END ===');
-      } catch (diagError: any) {
-        console.error('⚠️ Diagnostic check failed:', diagError.message);
-      }
       
       // Get paginated posts (contract now filters out deleted posts)
       const { postIds, total } = await contractService.getPostsPaginated(
@@ -317,6 +281,14 @@ export default function PostsFeed({
     // Don't reload posts - just close the modal
   };
 
+  const handlePostLoadFailed = (postId: number) => {
+    console.log('⚠️ Post failed to load, hiding from feed:', postId);
+    setFailedPosts(prev => new Set(prev).add(postId));
+  };
+
+  // Filter out posts that failed to load
+  const visiblePosts = posts.filter(post => !failedPosts.has(post.id));
+
   if (isLoading) {
     return <LoadingState message="Loading posts..." />;
   }
@@ -340,14 +312,14 @@ export default function PostsFeed({
       </div> */}
 
       {/* Posts List */}
-      {posts.length === 0 ? (
+      {visiblePosts.length === 0 ? (
         <div className="bg-gray-800/50 rounded-lg p-12 text-center">
           <p className="text-gray-400 font-mono">No posts yet. Be the first to post!</p>
         </div>
       ) : (
         <>
-          <div className="space-y-4">
-            {posts.map(post => (
+          <div className="space-y-4 mb-8">
+            {visiblePosts.map(post => (
               <PostCard
                 key={post.id}
                 postId={post.id}
@@ -369,6 +341,7 @@ export default function PostsFeed({
                 onUpvote={handleUpvote}
                 onDelete={handleDeletePost}
                 onComment={handleComment}
+                onLoadFailed={handlePostLoadFailed}
               />
             ))}
           </div>

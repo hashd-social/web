@@ -92,7 +92,7 @@ export const SessionPersistenceToggle: React.FC<SessionPersistenceToggleProps> =
               <Check className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
               <p className="alert-text">
                 <strong>Active:</strong> Your session is stored in sessionStorage. 
-                Your PIN is never stored—only the keyPair for message encryption.
+                Your PIN is never stored — only the keyPair for message encryption.
               </p>
             </div>
           </div>

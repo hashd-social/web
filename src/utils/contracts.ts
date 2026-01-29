@@ -195,7 +195,7 @@ export const SESSION_MANAGER_ABI = [
 
 export const GROUP_POSTS_ABI = [
   // Write functions
-  "function createPost(bytes32 contentHash, uint8 accessLevel) returns (uint256)",
+  "function createPost(bytes32 contentHash, uint8 accessLevel, uint256 hashIdToken) external returns (uint256)",
   "function deletePost(uint256 postId)",
   "function addComment(uint256 postId, bytes32 contentHash) returns (uint256)",
   "function deleteComment(uint256 commentId)",
@@ -212,14 +212,13 @@ export const GROUP_POSTS_ABI = [
   "function getUserPostCount(address author) view returns (uint256 count)",
   
   // View functions - Batch
-  // TEMPORARY: Using version WITHOUT downvotes to match deployed contract
-  "function getPostsBatch(uint256[] postIds) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)[])",
+  "function getPostsBatch(uint256[] postIds) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)[])",
   "function getCommentsBatch(uint256[] commentIds) view returns (tuple(uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted)[])",
   "function batchHasUpvotedPost(address user, uint256[] postIds) view returns (bool[])",
   "function batchHasUpvotedComment(address user, uint256[] commentIds) view returns (bool[])",
   
   // View functions - Single (UPDATED: optimized struct packing)
-  "function getPost(uint256 postId) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted))",
+  "function getPost(uint256 postId) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted))",
   "function getComment(uint256 commentId) view returns (tuple(uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted))",
   "function posts(uint256 postId) view returns (uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)",
   "function comments(uint256 commentId) view returns (uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted)",
@@ -236,7 +235,7 @@ export const GROUP_POSTS_ABI = [
   "function groupOwner() view returns (address)",
   "function userProfile() view returns (address)",
   
-  // Events (UPDATED: Enhanced for The Graph indexing)
+  // TODO: Events (UPDATED: Enhanced for The Graph indexing)
   "event PostCreated(uint256 indexed postId, address indexed author, bytes32 indexed ipfsHash, uint256 timestamp, uint8 accessLevel, uint256 authorPostIndex)",
   "event PostDeleted(uint256 indexed postId, address indexed author, uint256 timestamp)",
   "event CommentCreated(uint256 indexed commentId, uint256 indexed postId, address indexed author, bytes32 ipfsHash, uint256 timestamp, uint256 postCommentIndex)",
@@ -252,6 +251,7 @@ export const GROUP_FACTORY_ABI = [
   "function allGroups(uint256 index) view returns (string title, string description, bytes32 avatarCID, bytes32 headerCID, address owner, address tokenAddress, address nftAddress, address postsAddress)",
   "function allGroupsLength() view returns (uint256)",
   "function getGroupsForOwner(address owner) view returns (address[])",
+  "function updateGroupMetadata(address tokenAddress, string title, string description, bytes32 avatarCID, bytes32 headerCID)",
   "function userProfile() view returns (address)",
   "event GroupCreated(address indexed owner, address tokenAddress, address nftAddress, address postsAddress, string title)"
 ];
@@ -368,6 +368,7 @@ export const ERC721_ABI = [
   "function groupTitle() view returns (string)",
   "function groupDescription() view returns (string)",
   "function groupImageURI() view returns (string)",
+  "function platformTreasury() view returns (address)",
   // Group NFT functions
   "function purchaseNFT() payable",
   "function giftNFT(address to)",
@@ -437,8 +438,8 @@ export const CONTRACT_ADDRESSES = {
   MESSAGE_CONTRACT: process.env.REACT_APP_MESSAGE_CONTRACT || (() => {
     throw new Error('REACT_APP_MESSAGE_CONTRACT not set in .env file');
   })(),
-  HASHD_TAG: process.env.REACT_APP_HASHD_TAG || (() => {
-    throw new Error('REACT_APP_HASHD_TAG not set in .env file');
+  HASHID: process.env.REACT_APP_HASHID || (() => {
+    throw new Error('REACT_APP_HASHID not set in .env file');
   })(),
   VAULT_NODE_REGISTRY: process.env.REACT_APP_VAULT_NODE_REGISTRY || '',
 };
@@ -453,7 +454,7 @@ console.log('📋 Raw env vars:', {
   REACT_APP_GROUP_FACTORY_STORAGE: process.env.REACT_APP_GROUP_FACTORY_STORAGE,
   REACT_APP_KEY_REGISTRY: process.env.REACT_APP_KEY_REGISTRY,
   REACT_APP_ACCOUNT_REGISTRY: process.env.REACT_APP_ACCOUNT_REGISTRY,
-  REACT_APP_HASHD_TAG: process.env.REACT_APP_HASHD_TAG,
+  REACT_APP_HASHID: process.env.REACT_APP_HASHID,
   REACT_APP_MESSAGE_CONTRACT: process.env.REACT_APP_MESSAGE_CONTRACT,
   REACT_APP_USER_PROFILE: process.env.REACT_APP_USER_PROFILE,
   REACT_APP_GROUP_POSTS_DEPLOYER: process.env.REACT_APP_GROUP_POSTS_DEPLOYER,
@@ -1147,9 +1148,9 @@ export class ContractService {
     if (!this.contracts.accountRegistry) {
       throw new Error('AccountRegistry not initialized - call initializeReadOnlyContracts() first');
     }
-    const result = await this.contracts.accountRegistry.getAccounts(address);
-    return result.map((account: any) => ({
-      publicKey: account[0],
+    const accounts = await this.contracts.accountRegistry.getAccounts(address);
+    return accounts.map((account: any) => ({
+      publicKey: ethers.hexlify(account[0]),
       createdAt: account[1],
       isActive: account[2],
       hasHashIDAttached: account[3],
@@ -1157,7 +1158,6 @@ export class ContractService {
       hashIDTokenId: account[5]
     }));
   }
-
 
   async getAccountCount(address: string): Promise<number> {
     if (!this.contracts.accountRegistry) {
@@ -1452,9 +1452,10 @@ export class ContractService {
       const mapped = posts.map((post: any, index: number) => ({
         id: postIds[index],
         author: post.author,
-        ipfsHash: bytes32ToCid(post.ipfsHash), // Convert bytes32 back to CID string
+        contentHash: bytes32ToCid(post.contentHash), // Convert bytes32 back to CID string
         timestamp: Number(post.timestamp),
         upvotes: Number(post.upvotes),
+        downvotes: Number(post.downvotes),
         commentCount: Number(post.commentCount),
         accessLevel: Number(post.accessLevel),
         isDeleted: post.isDeleted
@@ -1477,9 +1478,10 @@ export class ContractService {
     const post = await contract.getPost(postId);
     return {
       id: Number(post.id),
-      ipfsHash: bytes32ToCid(post.ipfsHash), // Convert bytes32 back to CID string
+      contentHash: bytes32ToCid(post.contentHash), // Convert bytes32 back to CID string
       timestamp: Number(post.timestamp),
       upvotes: Number(post.upvotes),
+      downvotes: Number(post.downvotes),
       commentCount: Number(post.commentCount),
       author: post.author,
       accessLevel: Number(post.accessLevel),
@@ -1527,7 +1529,7 @@ export class ContractService {
       id: commentIds[index],
       postId: Number(comment.postId),
       author: comment.author,
-      ipfsHash: bytes32ToCid(comment.ipfsHash), // Convert bytes32 back to CID string
+      contentHash: bytes32ToCid(comment.contentHash), // Convert bytes32 back to CID string
       timestamp: Number(comment.timestamp),
       upvotes: Number(comment.upvotes),
       isDeleted: comment.isDeleted
@@ -1542,19 +1544,56 @@ export class ContractService {
   }
 
   // GroupPosts - Write Methods
-  async createPost(groupPostsAddress: string, ipfsHash: string, accessLevel: number): Promise<ethers.ContractTransactionResponse> {
-    console.log('📝 Creating post with CID:', ipfsHash, 'Access Level:', accessLevel);
+  async createPost(groupPostsAddress: string, contentHash: string, accessLevel: number, hashIdToken: string): Promise<ethers.ContractTransactionResponse> {
+    console.log('📝 Creating post with CID:', contentHash, 'Access Level:', accessLevel, 'HASHD ID:', hashIdToken);
     const provider = new ethers.BrowserProvider((window as any).ethereum);
     const signer = await provider.getSigner();
+    const signerAddress = await signer.getAddress();
     const contract = new ethers.Contract(groupPostsAddress, GROUP_POSTS_ABI, signer);
     
     // Convert CID string to bytes32
-    const bytes32Hash = cidToBytes32(ipfsHash);
+    const bytes32Hash = cidToBytes32(contentHash);
     console.log('📝 Converted to bytes32:', bytes32Hash);
+    console.log('📝 Signer address:', signerAddress);
     
-    const tx = await contract.createPost(bytes32Hash, accessLevel);
-    console.log('✅ Post creation tx:', tx.hash);
-    return tx;
+    // Pre-flight checks
+    try {
+      const isMember = await contract.isMember(signerAddress);
+      console.log('📝 Is member:', isMember);
+      if (!isMember) {
+        throw new Error('You are not a member of this group. Please join the group first.');
+      }
+    } catch (error: any) {
+      console.error('❌ Membership check failed:', error);
+      throw new Error('Failed to verify group membership: ' + error.message);
+    }
+    
+    try {
+      // Pass hashIdToken as string - ethers.js will handle BigInt conversion for uint256
+      console.log('📝 Calling createPost with:', { bytes32Hash, accessLevel, hashIdToken });
+      const tx = await contract.createPost(bytes32Hash, accessLevel, hashIdToken);
+      console.log('✅ Post creation tx:', tx.hash);
+      return tx;
+    } catch (error: any) {
+      console.error('❌ createPost transaction failed:', error);
+      console.error('Contract address:', groupPostsAddress);
+      console.error('Parameters:', { bytes32Hash, accessLevel, hashIdToken });
+      
+      // Parse revert reason
+      if (error.data) {
+        console.error('Error data:', error.data);
+      }
+      if (error.reason) {
+        console.error('Error reason:', error.reason);
+        throw new Error(error.reason);
+      }
+      if (error.message) {
+        console.error('Error message:', error.message);
+        throw new Error(error.message);
+      }
+      
+      throw error;
+    }
   }
 
   async upvotePost(groupPostsAddress: string, postId: number): Promise<ethers.ContractTransactionResponse> {
@@ -1589,13 +1628,13 @@ export class ContractService {
     return await contract.deletePost(postId);
   }
 
-  async addComment(groupPostsAddress: string, postId: number, ipfsHash: string): Promise<ethers.ContractTransactionResponse> {
+  async addComment(groupPostsAddress: string, postId: number, contentHash: string): Promise<ethers.ContractTransactionResponse> {
     const provider = new ethers.BrowserProvider((window as any).ethereum);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(groupPostsAddress, GROUP_POSTS_ABI, signer);
     
     // Convert CID string to bytes32
-    const bytes32Hash = cidToBytes32(ipfsHash);
+    const bytes32Hash = cidToBytes32(contentHash);
     
     return await contract.addComment(postId, bytes32Hash);
   }
@@ -1885,7 +1924,7 @@ export class ContractService {
   }
 
   // ============================================
-  // HASHDTAG NFT METHODS
+  // HashID NFT METHODS
   // ============================================
 
   /**
@@ -1900,7 +1939,7 @@ export class ContractService {
     try {
       const provider = this.getReadProvider();
       const hashID = new ethers.Contract(
-        CONTRACT_ADDRESSES.HASHD_TAG,
+        CONTRACT_ADDRESSES.HASHID,
         HASHD_ID_ABI,
         provider
       );
@@ -1951,7 +1990,7 @@ export class ContractService {
     try {
       const provider = this.getReadProvider();
       const hashID = new ethers.Contract(
-        CONTRACT_ADDRESSES.HASHD_TAG,
+        CONTRACT_ADDRESSES.HASHID,
         HASHD_ID_ABI,
         provider
       );
@@ -1975,7 +2014,7 @@ export class ContractService {
     try {
       const provider = this.getReadProvider();
       const hashID = new ethers.Contract(
-        CONTRACT_ADDRESSES.HASHD_TAG,
+        CONTRACT_ADDRESSES.HASHID,
         HASHD_ID_ABI,
         provider
       );
@@ -2072,7 +2111,7 @@ export class ContractService {
     }
     
     const hashID = new ethers.Contract(
-      CONTRACT_ADDRESSES.HASHD_TAG,
+      CONTRACT_ADDRESSES.HASHID,
       HASHD_ID_ABI,
       this.signer
     );

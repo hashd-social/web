@@ -6,8 +6,10 @@ import { NeonModal } from './NeonModal';
 import { MatrixNotify } from '../MatrixNotify';
 import { Stepper, Step } from '../Stepper';
 import { ImageUpload } from '../ImageUpload';
-import { GROUP_FACTORY_ABI } from '../../utils/contracts';
+import { GROUP_FACTORY_ABI, cidToBytes32 } from '../../utils/contracts';
 import { useByteCaveContext } from '@gethashd/bytecave-browser';
+import { useCurrentHashId } from '../../hooks/useCurrentHashId';
+import { calculateCID } from '../../utils/cid-calculator';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 
@@ -15,15 +17,18 @@ interface CreateGroupProps {
   onGroupCreated?: () => void;
   onClose?: () => void;
   isOpen: boolean;
+  userAddress: string | null;
 }
 
-export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClose, isOpen }) => {
+export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClose, isOpen, userAddress }) => {
   const { store, registerContent, isConnected, connect, connectionState, peers } = useByteCaveContext();
+  const { hashIdToken, hashIdName, loading: hashIdLoading, error: hashIdError } = useCurrentHashId(userAddress);
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    imageFile: null as File | null,
+    avatarFile: null as File | null,
+    headerFile: null as File | null,
     tokenName: '',
     tokenSymbol: '',
     nftName: '',
@@ -45,7 +50,8 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         setFormData({
           title: '',
           description: '',
-          imageFile: null,
+          avatarFile: null,
+          headerFile: null,
           tokenName: '',
           tokenSymbol: '',
           nftName: '',
@@ -67,7 +73,7 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
   const canProgressFromStep = (step: number): boolean => {
     switch (step) {
       case 0: // Guild Info
-        return !!(formData.title && formData.description && formData.imageFile);
+        return !!(formData.title && formData.description && formData.avatarFile);
       case 1: // Token
         return !!(formData.tokenName && formData.tokenSymbol);
       case 2: // NFT
@@ -101,8 +107,8 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         throw new Error('Please install MetaMask');
       }
 
-      if (!formData.imageFile) {
-        throw new Error('Please select an image for the guild');
+      if (!formData.avatarFile) {
+        throw new Error('Please select an avatar image for the guild');
       }
 
       // Ensure ByteCave is connected
@@ -124,33 +130,220 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         throw new Error('No storage peers available. Please ensure ByteCave nodes are running and connected to the relay.');
       }
 
-      console.log('Uploading image to ByteCave...');
-      console.log('Connected peers:', peers.length);
+      // Check if we have a HashID token
+      if (!hashIdToken) {
+        throw new Error(hashIdError || 'No HashID found for current mailbox. Please create or switch to a mailbox with a HashID.');
+      }
       
-      // Get signer first for both upload authorization and contract interaction
+      console.log('Using HashID token:', hashIdToken, 'Name:', hashIdName);
+      
+      // Get signer for both upload authorization and contract interaction
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       
-      // Upload image to ByteCave with authorization
-      const imageData = new Uint8Array(await formData.imageFile.arrayBuffer());
-      const uploadResult = await store(imageData, formData.imageFile.type, signer);
-
-      if (!uploadResult.success || !uploadResult.cid) {
-        throw new Error(uploadResult.error || 'Failed to upload image to ByteCave');
+      // STEP 1: Calculate CIDs from avatar and header images (before uploading)
+      console.log('🔍 Step 1: Calculating CIDs from image data...');
+      const avatarData = new Uint8Array(await formData.avatarFile.arrayBuffer());
+      const avatarCID = await calculateCID(avatarData);
+      console.log('✅ Avatar CID calculated:', avatarCID);
+      
+      let headerCID = avatarCID; // Default to avatar if no header
+      let headerData = avatarData;
+      if (formData.headerFile) {
+        headerData = new Uint8Array(await formData.headerFile.arrayBuffer());
+        headerCID = await calculateCID(headerData);
+        console.log('✅ Header CID calculated:', headerCID);
+      } else {
+        console.log('ℹ️ No header file provided, using avatar for both');
       }
 
-      console.log('Image uploaded to ByteCave, CID:', uploadResult.cid);
-
-      // Register content in ContentRegistry (on-chain)
-      console.log('Registering content in ContentRegistry...');
-      const registrationResult = await registerContent(uploadResult.cid, 'hashd', signer);
+      // STEP 2: Verify user owns the HashID token
+      console.log('🔍 Step 2: Verifying HashID ownership...');
+      const userAddr = await signer.getAddress();
+      console.log('User Address:', userAddr);
+      console.log('HashID Token (string):', hashIdToken);
+      console.log('HashID Name:', hashIdName);
       
-      if (!registrationResult.success) {
-        throw new Error(`ContentRegistry registration failed: ${registrationResult.error}`);
+      // Verify ownership using HashID contract
+      try {
+        const hashIdAddress = process.env.REACT_APP_HASHID;
+        if (!hashIdAddress) {
+          console.warn('⚠️ HashID contract address not configured, skipping ownership verification');
+        } else {
+          const hashIdContract = new ethers.Contract(
+            hashIdAddress,
+            ['function ownerOf(uint256 tokenId) view returns (address)'],
+            provider
+          );
+          
+          const owner = await hashIdContract.ownerOf(hashIdToken);
+          console.log('HashID Token Owner:', owner);
+          
+          if (owner.toLowerCase() !== userAddr.toLowerCase()) {
+            throw new Error(`You don't own HashID token ${hashIdToken}. Owner is ${owner}`);
+          }
+          
+          console.log('✅ HashID ownership verified');
+        }
+      } catch (err: any) {
+        console.error('HashID ownership verification failed:', err);
+        throw new Error(`HashID verification failed: ${err.message}`);
       }
       
-      console.log('Content registered in ContentRegistry, tx hash:', registrationResult.txHash);
+      // STEP 3: Check ContentRegistry configuration
+      console.log('🔍 Step 3: Checking ContentRegistry configuration...');
+      
+      // Check ContentRegistry configuration before attempting registration
+      try {
+        const contentRegistryAddress = process.env.REACT_APP_CONTENT_REGISTRY;
+        if (contentRegistryAddress) {
+          const contentRegistry = new ethers.Contract(
+            contentRegistryAddress,
+            [
+              'function hashIdContract() view returns (address)',
+              'function contentStorage() view returns (address)'
+            ],
+            provider
+          );
+          
+          const hashIdContractAddr = await contentRegistry.hashIdContract();
+          const contentStorageAddr = await contentRegistry.contentStorage();
+          
+          console.log('ContentRegistry configuration:');
+          console.log('  HashID Contract:', hashIdContractAddr);
+          console.log('  Content Storage:', contentStorageAddr);
+          
+          if (hashIdContractAddr === ethers.ZeroAddress) {
+            throw new Error('ContentRegistry has not been initialized with HashID contract address. Please run the deployment setup script.');
+          }
+          console.log('✅ ContentRegistry configuration verified');
+        }
+      } catch (err: any) {
+        console.error('ContentRegistry configuration check failed:', err);
+        throw new Error(`ContentRegistry not properly configured: ${err.message}`);
+      }
+      
+      // STEP 4: Register both avatar and header content in ContentRegistry BEFORE uploading to storage
+      console.log('🔍 Step 4: Checking if CIDs are already registered...');
+      
+      const contentRegistryAddress = process.env.REACT_APP_CONTENT_REGISTRY;
+      if (!contentRegistryAddress) {
+        throw new Error('ContentRegistry address not configured');
+      }
+      
+      const contentRegistry = new ethers.Contract(
+        contentRegistryAddress,
+        ['function isContentRegistered(bytes32 cidHash) view returns (bool)'],
+        provider
+      );
+      
+      // Register avatar CID
+      const avatarBytes32ForCheck = '0x' + avatarCID;
+      const isAvatarRegistered = await contentRegistry.isContentRegistered(avatarBytes32ForCheck);
+      
+      console.log('Avatar CID registration check:');
+      console.log('  CID:', avatarCID);
+      console.log('  Already registered:', isAvatarRegistered);
+      
+      if (!isAvatarRegistered) {
+        console.log('🔍 Step 5a: Registering avatar in ContentRegistry...');
+        console.log('  Calling registerContent with:', { avatarCID, appId: 'hashd', hashIdToken });
+        
+        const avatarRegistrationResult = await registerContent(avatarCID, 'hashd', hashIdToken, signer);
+        
+        console.log('  Registration result:', avatarRegistrationResult);
+        
+        if (!avatarRegistrationResult.success) {
+          throw new Error(`Avatar ContentRegistry registration failed: ${avatarRegistrationResult.error}`);
+        }
+        
+        console.log('✅ Avatar registered in ContentRegistry, tx hash:', avatarRegistrationResult.txHash);
+      } else {
+        console.log('✅ Avatar already registered, skipping registration');
+      }
+      
+      // Register header CID if different from avatar
+      if (formData.headerFile && headerCID !== avatarCID) {
+        const headerBytes32ForCheck = '0x' + headerCID;
+        const isHeaderRegistered = await contentRegistry.isContentRegistered(headerBytes32ForCheck);
+        
+        console.log('Header CID registration check:');
+        console.log('  CID:', headerCID);
+        console.log('  Already registered:', isHeaderRegistered);
+        
+        if (!isHeaderRegistered) {
+          console.log('🔍 Step 5b: Registering header in ContentRegistry...');
+          const headerRegistrationResult = await registerContent(headerCID, 'hashd', hashIdToken, signer);
+          
+          if (!headerRegistrationResult.success) {
+            throw new Error(`Header ContentRegistry registration failed: ${headerRegistrationResult.error}`);
+          }
+          
+          console.log('✅ Header registered in ContentRegistry, tx hash:', headerRegistrationResult.txHash);
+        }
+      }
+      
+      // STEP 5: Now upload both images to ByteCave storage (nodes will verify they're registered)
+      console.log('🔍 Step 6: Uploading images to ByteCave storage...');
+      console.log('Connected peers:', peers.length);
+      
+      // Ensure ByteCave is connected
+      if (!isConnected || connectionState !== 'connected') {
+        console.log('ByteCave not connected, attempting to connect...');
+        try {
+          await connect();
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (connectError: any) {
+          throw new Error(`Failed to connect to ByteCave: ${connectError.message}`);
+        }
+      }
+      
+      if (peers.length === 0) {
+        throw new Error('No storage peers available. Please ensure ByteCave nodes are running.');
+      }
+      
+      // Convert hashIdToken to number for store()
+      const hashIdTokenNumber = Number(hashIdToken);
+      
+      // Upload avatar with pre-calculated CID
+      console.log('🔍 Uploading avatar to ByteCave...');
+      console.log('  Avatar data size:', avatarData.length, 'bytes');
+      console.log('  MIME type:', formData.avatarFile.type);
+      console.log('  HashID token:', hashIdTokenNumber);
+      
+      const avatarUploadResult = await store(avatarData, formData.avatarFile.type, signer, hashIdTokenNumber);
 
+      console.log('  Upload result:', avatarUploadResult);
+
+      if (!avatarUploadResult.success || !avatarUploadResult.cid) {
+        throw new Error(avatarUploadResult.error || 'Failed to upload avatar to ByteCave');
+      }
+      
+      // Verify the uploaded CID matches our pre-calculated CID
+      if (avatarUploadResult.cid !== avatarCID) {
+        throw new Error(`Avatar CID mismatch! Calculated: ${avatarCID}, Uploaded: ${avatarUploadResult.cid}`);
+      }
+
+      console.log('✅ Avatar uploaded to ByteCave, CID verified:', avatarUploadResult.cid);
+      
+      // Upload header if different from avatar
+      if (formData.headerFile && headerCID !== avatarCID) {
+        console.log('Uploading header...');
+        const headerUploadResult = await store(headerData, formData.headerFile.type, signer, hashIdTokenNumber);
+
+        if (!headerUploadResult.success || !headerUploadResult.cid) {
+          throw new Error(headerUploadResult.error || 'Failed to upload header to ByteCave');
+        }
+        
+        if (headerUploadResult.cid !== headerCID) {
+          throw new Error(`Header CID mismatch! Calculated: ${headerCID}, Uploaded: ${headerUploadResult.cid}`);
+        }
+
+        console.log('✅ Header uploaded to ByteCave, CID verified:', headerUploadResult.cid);
+      }
+
+      // STEP 6: Create group on-chain
+      console.log('🔍 Step 7: Creating group on-chain...');
       const factory = new ethers.Contract(GROUP_FACTORY_ADDRESS, GROUP_FACTORY_ABI, signer);
 
       console.log('Creating group with data:', formData);
@@ -158,15 +351,29 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
       const nftPriceWei = ethers.parseEther(formData.nftPrice);
       const maxNFTs = parseInt(formData.maxNFTs);
 
-      // Convert CID string to bytes32 format for contract storage
-      // For now, using the same CID for both avatar and header
-      const cidBytes32 = ethers.encodeBytes32String(uploadResult.cid);
+      // Convert CID strings to bytes32 format for contract storage
+      // ByteCave CIDs are SHA-256 hex hashes (64 chars), not base58-encoded
+      const avatarCIDBytes32 = cidToBytes32(avatarCID);
+      const headerCIDBytes32 = cidToBytes32(headerCID);
 
+      console.log('Calling factory.createGroup with:', {
+        title: formData.title,
+        description: formData.description,
+        avatarCIDBytes32,
+        headerCIDBytes32,
+        tokenName: formData.tokenName,
+        tokenSymbol: formData.tokenSymbol,
+        nftName: formData.nftName,
+        nftSymbol: formData.nftSymbol,
+        nftPriceWei: nftPriceWei.toString(),
+        maxNFTs
+      });
+      
       const tx = await factory.createGroup(
         formData.title,
         formData.description,
-        cidBytes32, // avatarCID
-        cidBytes32, // headerCID (same as avatar for now)
+        avatarCIDBytes32, // avatarCID - used for NFT image
+        headerCIDBytes32, // headerCID - used for group header
         formData.tokenName,
         formData.tokenSymbol,
         formData.nftName,
@@ -175,9 +382,10 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
         maxNFTs
       );
 
-      console.log('Transaction sent:', tx.hash);
+      console.log('✅ Transaction sent:', tx.hash);
+      console.log('⏳ Waiting for confirmation...');
       const receipt = await tx.wait();
-      console.log('Transaction confirmed:', receipt);
+      console.log('✅ Transaction confirmed:', receipt.hash);
 
       // Parse the GroupCreated event (optional - for logging)
       const event = receipt.logs
@@ -193,47 +401,19 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
       if (event) {
         console.log('GroupCreated event:', event.args);
         
-        // Manually join the group as a fallback (in case contract auto-join didn't work)
-        try {
-          const tokenAddress = event.args.tokenAddr;
-          const userProfileAddress = process.env.REACT_APP_USER_PROFILE || '';
-          
-          if (!userProfileAddress) {
-            console.warn('UserProfile address not configured, skipping auto-join check');
-            return;
-          }
-          
-          const userProfile = new ethers.Contract(
-            userProfileAddress,
-            [
-              'function joinGroup(address groupToken) external',
-              'function hasJoinedGroup(address user, address groupToken) view returns (bool)'
-            ],
-            signer
-          );
-          
-          // Check if already joined (from contract auto-join)
-          const alreadyJoined = await userProfile.hasJoinedGroup(await signer.getAddress(), tokenAddress);
-          
-          if (!alreadyJoined) {
-            console.log('Auto-join did not work, manually joining group...');
-            const joinTx = await userProfile.joinGroup(tokenAddress);
-            await joinTx.wait();
-            console.log('✅ Manually joined group');
-          } else {
-            console.log('✅ Already joined via contract auto-join');
-          }
-        } catch (joinError) {
-          console.error('Error joining group:', joinError);
-          // Don't fail the whole operation if join fails
-        }
+        // Set success state with the created group info
+        setSuccess({
+          tokenAddr: event.args.tokenAddr,
+          nftAddr: event.args.nftAddr
+        });
       }
 
       // Reset form
       setFormData({
         title: '',
         description: '',
-        imageFile: null,
+        avatarFile: null,
+        headerFile: null,
         tokenName: '',
         tokenSymbol: '',
         nftName: '',
@@ -313,25 +493,50 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
           <div>
             <label className="text-xs font-bold neon-text-cyan uppercase tracking-wider mb-3 block font-mono flex items-center gap-2">
               <div className="w-1 h-4 bg-cyan-500 rounded-full"></div>
-              Guild Header Image
+              Guild Avatar * (Used for NFT image)
             </label>
             <ImageUpload
               deferUpload={true}
               onFileSelected={(file) => {
-                setFormData({ ...formData, imageFile: file });
+                setFormData({ ...formData, avatarFile: file });
               }}
               onImageUploaded={() => {}}
-              currentImageUrl={formData.imageFile ? URL.createObjectURL(formData.imageFile) : ''}
+              currentImageUrl={formData.avatarFile ? URL.createObjectURL(formData.avatarFile) : ''}
               disabled={isCreating}
               maxSizeMB={5}
             />
-            {formData.imageFile && (
+            {formData.avatarFile && (
               <div className="mt-2 bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2">
                 <p className="text-xs text-gray-400 font-mono">
-                  <strong className="text-cyan-400">Image:</strong> {formData.imageFile.name} ({(formData.imageFile.size / 1024).toFixed(1)} KB)
+                  <strong className="text-cyan-400">Avatar:</strong> {formData.avatarFile.name} ({(formData.avatarFile.size / 1024).toFixed(1)} KB)
                 </p>
               </div>
             )}
+          </div>
+
+          <div>
+            <label className="text-xs font-bold neon-text-cyan uppercase tracking-wider mb-3 block font-mono flex items-center gap-2">
+              <div className="w-1 h-4 bg-cyan-500 rounded-full"></div>
+              Guild Header Image (Optional)
+            </label>
+            <ImageUpload
+              deferUpload={true}
+              onFileSelected={(file) => {
+                setFormData({ ...formData, headerFile: file });
+              }}
+              onImageUploaded={() => {}}
+              currentImageUrl={formData.headerFile ? URL.createObjectURL(formData.headerFile) : ''}
+              disabled={isCreating}
+              maxSizeMB={5}
+            />
+            {formData.headerFile && (
+              <div className="mt-2 bg-purple-500/5 border border-purple-500/20 rounded-lg p-2">
+                <p className="text-xs text-gray-400 font-mono">
+                  <strong className="text-purple-400">Header:</strong> {formData.headerFile.name} ({(formData.headerFile.size / 1024).toFixed(1)} KB)
+                </p>
+              </div>
+            )}
+            <p className="text-xs text-gray-400 font-mono mt-2">If not provided, avatar will be used</p>
           </div>
         </div>
       )
@@ -509,12 +714,18 @@ export const CreateGroup: React.FC<CreateGroupProps> = ({ onGroupCreated, onClos
                 <span className="text-gray-400">Description:</span>
                 <span className="text-white font-mono text-right max-w-xs truncate">{formData.description}</span>
               </div>
-              <div className="flex justify-between align-center">
-
-          {formData.imageFile && (
-                  <div className="mt-2 bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2">
+              <div className="flex flex-col gap-2">
+                {formData.avatarFile && (
+                  <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-lg p-2">
                     <p className="text-xs text-gray-400 font-mono">
-                      <strong className="text-cyan-400">Image:</strong> {formData.imageFile.name} ({(formData.imageFile.size / 1024).toFixed(1)} KB)
+                      <strong className="text-cyan-400">Avatar:</strong> {formData.avatarFile.name} ({(formData.avatarFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  </div>
+                )}
+                {formData.headerFile && (
+                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-2">
+                    <p className="text-xs text-gray-400 font-mono">
+                      <strong className="text-purple-400">Header:</strong> {formData.headerFile.name} ({(formData.headerFile.size / 1024).toFixed(1)} KB)
                     </p>
                   </div>
                 )}

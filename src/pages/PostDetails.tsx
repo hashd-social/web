@@ -87,7 +87,7 @@ export default function PostDetails({ contractService, userAddress }: PostDetail
       
       // Decrypt content
       const groupKey = deriveGroupKey(groupAddress);
-      const decrypted = await downloadAndDecryptPost(postData.ipfsHash, groupKey);
+      const decrypted = await downloadAndDecryptPost(postData.contentHash, groupKey);
       setContent(decrypted);
       
     } catch (err) {
@@ -204,7 +204,7 @@ export default function PostDetails({ contractService, userAddress }: PostDetail
                 {showMenu && (
                   <div className="absolute right-0 mt-1 w-56 bg-gray-900/95 rounded-lg shadow-lg py-1 z-10">
                     <a
-                      href={`${vaultPrimaryNode}/blob/${post.ipfsHash}`}
+                      href={`${vaultPrimaryNode}/blob/${post.contentHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full px-4 py-2 text-left text-sm text-cyan-400 hover:bg-cyan-500/10 flex items-center gap-2 font-mono font-bold"

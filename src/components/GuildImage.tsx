@@ -8,7 +8,7 @@ interface GuildImageProps {
   className?: string;
   fallbackIcon?: React.ReactNode;
 }
-
+// TODO: Make generic image component and test the hashd:// protocol
 export const GuildImage: React.FC<GuildImageProps> = ({ 
   imageURI, 
   alt, 
@@ -18,6 +18,8 @@ export const GuildImage: React.FC<GuildImageProps> = ({
   const { blobUrl, loading, error } = useHashdUrl(
     imageURI?.startsWith('hashd://') ? imageURI : null
   );
+
+  console.log('[GuildImage]', alt, '- URI:', imageURI?.slice(0, 30), 'loading:', loading, 'error:', error, 'blobUrl:', !!blobUrl);
 
   if (!imageURI) {
     return (
@@ -37,6 +39,7 @@ export const GuildImage: React.FC<GuildImageProps> = ({
     }
 
     if (error || !blobUrl) {
+      console.log('[GuildImage] Showing fallback for', alt, '- error:', error);
       return (
         <div className={`flex items-center justify-center ${className}`}>
           {fallbackIcon || <Users className="w-12 h-12 text-cyan-400/30" />}

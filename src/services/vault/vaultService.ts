@@ -203,14 +203,28 @@ class VaultService {
             throw new Error(`${url}: ${response.status}`);
           }
         } catch (error) {
+          // Silently handle connection errors and 404s - these are expected
+          const err = error as Error;
+          const isExpectedError = err.message.includes('ERR_CONNECTION_REFUSED') || 
+                                  err.message.includes('404') ||
+                                  err.message.includes('Failed to fetch');
+          
+          if (!isExpectedError) {
+            console.warn(`Vault node error (${url}):`, err.message);
+          }
+          
           errorCount++;
-          errors.push(error as Error);
+          errors.push(err);
           
           // If all nodes failed, reject with combined error
           if (errorCount === nodeUrls.length && !resolved) {
-            // Check if all errors are 404s - this is expected for new content
-            const all404 = errors.every(e => e.message.includes('404'));
-            if (all404) {
+            // Check if all errors are 404s or connection errors - this is expected for missing content
+            const allExpected = errors.every(e => 
+              e.message.includes('404') || 
+              e.message.includes('ERR_CONNECTION_REFUSED') ||
+              e.message.includes('Failed to fetch')
+            );
+            if (allExpected) {
               reject(new Error('BLOB_NOT_FOUND'));
             } else {
               reject(new Error(`All nodes failed: ${errors.map(e => e.message).join(', ')}`));

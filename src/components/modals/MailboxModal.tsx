@@ -405,7 +405,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
       return 'Enter your PIN to access a different mailbox';
     if (isCreatingNew)
       return mailboxes.length === 0
-        ? 'Create unlimited mailboxes! Choose a HashID (human-readable name, 5+ chars FREE for first account) or go anonymous with a bare account.'
+        ? 'Create unlimited mailboxes! Choose a HashID (human-readable name, 5+ chars FREE for first account).'
         : 'Create additional mailbox. Named accounts have fees, bare accounts are always free.';
     return 'Enter your PIN to access your existing mailbox';
   };
@@ -570,7 +570,7 @@ export const MailboxModal: React.FC<MailboxModalProps> = ({
                   </div>
                   <div className="mt-4">
                     <p className="text-xs text-gray-400 font-mono mb-2">
-                      {newAccountName ? 'Lowercase alphanumeric, underscores only. Max 15 chars.' : 'Leave empty for anonymous bare account (always free)'}
+                      {newAccountName ? 'Lowercase alphanumeric, underscores only. Max 15 chars.' : 'You can leave empty for now and link a HashID later.'}
                     </p>
                     {accountNameError && (
                       <p className="text-xs text-red-400 mt-1 font-medium font-mono">⚠️ {accountNameError}</p>

@@ -155,7 +155,7 @@ export const LinkedMailboxes: React.FC<LinkedMailboxesProps> = ({
                     </h4>
                     {account.type === 'named' && (
                       <span className="px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/30 rounded text-xs font-mono neon-text-cyan">
-                        HASHDTAG
+                        HashID
                       </span>
                     )}
                     {account.type === 'bare' && !account.hasHashIDAttached && (

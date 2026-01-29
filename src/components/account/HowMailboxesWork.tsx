@@ -68,8 +68,11 @@ export const HowMailboxesWork: React.FC = () => {
             <div>
               <h4 className="text-sm font-bold text-white mb-1 font-mono">HashID Identity</h4>
               <p className="text-sm text-gray-400 leading-relaxed">
-                Your HashID (like @username) is your human-readable identity on-chain. It's linked to your public key and provides a consistent identity across all Hashd services.
+                Your HashID (like @username) is your human-readable identity on-chain. It's linked to your public key and provides a consistent identity across all Hashd services. 
               </p>
+              <p className="text-sm text-gray-400 mt-6 leading-relaxed font-bold">
+                **Your mailbox public key is required to have a HashID attached to it in order to post content and send messages.**
+              </p>              
             </div>
           </div>
         </div>

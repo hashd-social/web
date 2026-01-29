@@ -34,6 +34,7 @@ export const Feed: React.FC<FeedProps> = ({
           isOpen={showCreateGroupModal}
           onClose={onCloseModal}
           onGroupCreated={onGroupCreated}
+          userAddress={userAddress}
         />
       </div>
     </div>

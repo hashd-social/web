@@ -143,7 +143,7 @@ export const SystemInfo: React.FC<SystemInfoProps> = ({ onError }) => {
       },
       {
         name: 'HashID (NFT)',
-        address: process.env.REACT_APP_HASHD_TAG || 'Not deployed',
+        address: process.env.REACT_APP_HASHID || 'Not deployed',
         description: 'Account NFT collection',
         icon: '🎫'
       },

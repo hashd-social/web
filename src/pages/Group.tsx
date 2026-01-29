@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { Users, ExternalLink, MessageSquare, Info, Coins, Image, TrendingUp } from 'lucide-react';
+import { useCurrentHashId } from '../hooks/useCurrentHashId';
 import PostsFeed from '../components/PostsFeed';
 import { QuickActions } from '../components/QuickActions';
 import { SuggestedGroups } from '../components/SuggestedGroups';
@@ -11,6 +12,7 @@ import { ClaimAirdropModal } from '../components/modals/ClaimAirdropModal';
 import { CreatePostModal } from '../components/modals/CreatePostModal';
 import { BuyNFTModal } from '../components/modals/BuyNFTModal';
 import { GiftNFTModal } from '../components/modals/GiftNFTModal';
+import { EditGroupInfoModal } from '../components/modals/EditGroupInfoModal';
 import { AirdropRecipient } from '../utils/merkleTree';
 import { deriveGroupKey } from '../services/ipfs/groupPosts';
 import { contractService, NETWORK_CONFIG, GROUP_FACTORY_ABI, ERC20_ABI, ERC721_ABI, USER_PROFILE_ABI, GROUP_POSTS_ABI } from '../utils/contracts';
@@ -18,7 +20,7 @@ import { LoadingState } from '../components/Spinner';
 import { extractColorFromImageElement } from '../utils/colorExtractor';
 import { useNotify } from '../components/Toast';
 import { GuildImage } from '../components/GuildImage';
-import { bytes32ToHashdUrl } from '../utils/cid';
+import { bytes32ToCid } from '../utils/contracts';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 const USER_PROFILE_ADDRESS = process.env.REACT_APP_USER_PROFILE || '';
@@ -28,12 +30,18 @@ interface NFTHolder {
   tokenId: number;
   owner: string;
   tokenURI: string;
+  metadata?: {
+    name: string;
+    description: string;
+    image: string;
+  };
 }
 
 interface GroupData {
   title: string;
   description: string;
-  imageURI: string;
+  imageURI: string; // Avatar image
+  headerImageURI: string; // Header banner image
   owner: string;
   tokenAddress: string;
   nftAddress: string;
@@ -61,6 +69,7 @@ export const Group: React.FC = () => {
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [showDistributeModal, setShowDistributeModal] = useState(false);
   const [showClaimModal, setShowClaimModal] = useState(false);
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [userAddress, setUserAddress] = useState('');
   const [isOwner, setIsOwner] = useState(false);
   const [nftHolders, setNftHolders] = useState<NFTHolder[]>([]);
@@ -73,6 +82,7 @@ export const Group: React.FC = () => {
   const avatarImgRef = React.useRef<HTMLImageElement>(null);
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const [postCount, setPostCount] = useState(0);
+  const { hashIdToken } = useCurrentHashId(userAddress);
 
   useEffect(() => {
     findGroupIndexByAddress();
@@ -212,10 +222,19 @@ export const Group: React.FC = () => {
         setDistributionSet(merkleRoot !== ethers.ZeroHash);
       }
 
+      const avatarCid = bytes32ToCid(groupInfo.avatarCID);
+      const headerCid = bytes32ToCid(groupInfo.headerCID);
+      
+      console.log('[Group] Avatar CID:', groupInfo.avatarCID, '→', avatarCid);
+      console.log('[Group] Header CID:', groupInfo.headerCID, '→', headerCid);
+      console.log('[Group] Avatar URI:', avatarCid ? `hashd://${avatarCid}` : '(empty)');
+      console.log('[Group] Header URI:', headerCid ? `hashd://${headerCid}` : '(empty)');
+      
       setGroup({
         title: groupInfo.title,
         description: groupInfo.description,
-        imageURI: bytes32ToHashdUrl(groupInfo.avatarCID),
+        imageURI: avatarCid ? `hashd://${avatarCid}` : '',
+        headerImageURI: headerCid ? `hashd://${headerCid}` : '',
         owner: groupInfo.owner,
         tokenAddress: groupInfo.tokenAddress,
         nftAddress: groupInfo.nftAddress,
@@ -423,11 +442,30 @@ export const Group: React.FC = () => {
             nftContract.ownerOf(tokenId),
             nftContract.tokenURI(tokenId)
           ])
-          .then(([owner, tokenURI]) => ({
-            tokenId,
-            owner,
-            tokenURI
-          }))
+          .then(async ([owner, tokenURI]) => {
+            let metadata;
+            try {
+              // Parse metadata from tokenURI (data URI or IPFS)
+              if (tokenURI.startsWith('data:application/json;base64,')) {
+                const base64Data = tokenURI.split(',')[1];
+                const jsonString = atob(base64Data);
+                metadata = JSON.parse(jsonString);
+              } else if (tokenURI.startsWith('ipfs://')) {
+                const ipfsHash = tokenURI.replace('ipfs://', '');
+                const response = await fetch(`https://ipfs.io/ipfs/${ipfsHash}`);
+                metadata = await response.json();
+              }
+            } catch (err) {
+              console.error(`Error parsing metadata for NFT ${tokenId}:`, err);
+            }
+            
+            return {
+              tokenId,
+              owner,
+              tokenURI,
+              metadata
+            };
+          })
           .catch(err => {
             console.error(`Error loading NFT ${tokenId}:`, err);
             return null;
@@ -460,21 +498,81 @@ export const Group: React.FC = () => {
 
   const handleBuyNFT = async () => {
     try {
-      if (!window.ethereum || !group) return;
+      if (!window.ethereum || !group) {
+        throw new Error('Wallet not connected or group not loaded');
+      }
+      
+      console.log('🎫 Starting NFT purchase:', {
+        nftAddress: group.nftAddress,
+        nftPrice: group.nftPrice,
+        priceWei: ethers.parseEther(group.nftPrice || '0').toString()
+      });
       
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      const signerAddress = await signer.getAddress();
+      console.log('Signer address:', signerAddress);
+      
       const nftContract = new ethers.Contract(group.nftAddress, ERC721_ABI, signer);
       
-      const priceWei = ethers.parseEther(group.nftPrice || '0');
-      const tx = await nftContract.purchaseNFT({ value: priceWei });
-      await tx.wait();
+      // Check contract state before attempting purchase
+      const [nextTokenId, maxNFTs, nftPrice, owner, platformTreasury] = await Promise.all([
+        nftContract.nextTokenId(),
+        nftContract.MAX_NFTS(),
+        nftContract.nftPrice(),
+        nftContract.owner(),
+        nftContract.platformTreasury()
+      ]);
       
-      setShowBuyModal(false);
-      await loadGroupData(); // Refresh data including holders
+      console.log('NFT Contract State:', {
+        nextTokenId: nextTokenId.toString(),
+        maxNFTs: maxNFTs.toString(),
+        nftPrice: ethers.formatEther(nftPrice),
+        owner,
+        platformTreasury
+      });
+      
+      const priceWei = ethers.parseEther(group.nftPrice || '0');
+      console.log('Calling purchaseNFT with value:', priceWei.toString());
+      
+      const tx = await nftContract.purchaseNFT({ value: priceWei });
+      console.log('Transaction sent:', tx.hash);
+      
+      await tx.wait();
+      console.log('Transaction confirmed');
+      
+      // The minted token ID is nextTokenId + 1 (contract increments before minting)
+      const tokenId = Number(nextTokenId) + 1;
+      console.log('Minted token ID:', tokenId);
+      
+      // Fetch the minted NFT metadata
+      const tokenURI = await nftContract.tokenURI(tokenId);
+      let metadata;
+      try {
+        if (tokenURI.startsWith('data:application/json;base64,')) {
+          const base64Data = tokenURI.split(',')[1];
+          const jsonString = atob(base64Data);
+          metadata = JSON.parse(jsonString);
+        } else if (tokenURI.startsWith('ipfs://')) {
+          const ipfsHash = tokenURI.replace('ipfs://', '');
+          const response = await fetch(`https://ipfs.io/ipfs/${ipfsHash}`);
+          metadata = await response.json();
+        }
+      } catch (err) {
+        console.error('Error parsing NFT metadata:', err);
+      }
+      
+      // Don't refresh data here - it causes page refresh and resets modal state
+      // Data will be refreshed when modal closes
+      
+      return {
+        tokenId,
+        metadata
+      };
     } catch (err: any) {
       console.error('Error buying NFT:', err);
       notify.error(err.message || 'Failed to purchase NFT');
+      throw err;
     }
   };
 
@@ -529,68 +627,83 @@ export const Group: React.FC = () => {
 
   return (
     <div className="min-h-screen hex-grid bg-gray-900">
-      {/* Header Banner */}
+      {/* Twitter-style Header with Banner and Avatar */}
+      <div className="relative">
+        {/* Header Banner Image */}
+        <div className="h-48 sm:h-64 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden">
+          <GuildImage
+            imageURI={group.headerImageURI || group.imageURI}
+            alt={`${group.title} header`}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-gray-900/80" />
+        </div>
 
-
-
-      <div 
-        className="backdrop-blur-sm relative overflow-hidden"
-
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 ">
-          <div className="flex items-center justify-between gap-4">
-            {/* Left Side - Avatar & Details */}
-            <div className="flex items-center gap-4 sm:gap-6 flex-1 min-w-0">
-              {/* Group Avatar */}
+        {/* Content Container - Overlaps banner */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="relative -mt-16 sm:-mt-20">
+            <div className="flex items-end justify-between gap-4 mb-4">
+              {/* Avatar - overlaps banner */}
               <div className="flex-shrink-0">
-                <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden border-4 border-cyan-500/20 shadow-lg shadow-cyan-500/10">
+                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gray-900 overflow-hidden border-4 border-gray-900 shadow-xl">
                   <GuildImage
                     imageURI={group.imageURI}
                     alt={group.title}
                     className="w-full h-full object-cover"
-                    fallbackIcon={<Users className="w-8 h-8 text-cyan-400/50" />}
+                    fallbackIcon={<Users className="w-12 h-12 text-cyan-400/50" />}
                   />
                 </div>
               </div>
 
-              {/* Group Details */}
-              <div className="flex-1 min-w-0">
-                <h1 className="text-xl sm:text-2xl font-bold text-white mb-1 tracking-wide">{group.title}</h1>
-                <p className="text-sm text-gray-400 mb-2 line-clamp-1">{group.description}</p>
-                
-                <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
-                  <Users className="w-3 h-3 text-cyan-400/50" />
-                  <span className="truncate">Created by {shortenAddress(group.owner)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Side - Join/Leave Button & Member Count */}
-            {userAddress && USER_PROFILE_ADDRESS && (
-              <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                {isJoined ? (
+              {/* Action Buttons */}
+              <div className="flex-shrink-0 flex items-center gap-2">
+                {/* Edit Button (Owner Only) */}
+                {isOwner && (
                   <button
-                    onClick={handleLeaveGroup}
-                    disabled={isJoining}
-                    className="flex items-center gap-2 bg-gray-800/50 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-900/20 hover:border-red-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
+                    onClick={() => setShowEditGroupModal(true)}
+                    className="flex items-center gap-2 bg-gray-800/50 border border-cyan-500/30 text-cyan-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-cyan-900/20 hover:border-cyan-500/50 transition-all uppercase tracking-wider"
                   >
-                    <Users className="w-4 h-4" />
-                    {isJoining ? 'Leaving...' : 'Leave'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleJoinGroup}
-                    disabled={isJoining}
-                    className="cyber-button relative flex items-center justify-center gap-2 px-6 py-2.5 text-sm overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Users className="w-4 h-4" />
-                    {isJoining ? 'Joining...' : 'Join Guild'}
+                    EDIT
                   </button>
                 )}
                 
-    
+                {/* Join/Leave Button */}
+                {userAddress && USER_PROFILE_ADDRESS && (
+                  <>
+                    {isJoined ? (
+                      <button
+                        onClick={handleLeaveGroup}
+                        disabled={isJoining}
+                        className="flex items-center gap-2 bg-gray-800/50 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-900/20 hover:border-red-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
+                      >
+                        <Users className="w-4 h-4" />
+                        {isJoining ? 'Leaving...' : 'Leave'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleJoinGroup}
+                        disabled={isJoining}
+                        className="cyber-button relative flex items-center justify-center gap-2 px-6 py-2.5 text-sm overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Users className="w-4 h-4" />
+                        {isJoining ? 'Joining...' : 'Join Guild'}
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
-            )}
+            </div>
+
+            {/* Group Info */}
+            <div className="pb-4">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-wide">{group.title}</h1>
+              <p className="text-sm sm:text-base text-gray-400 mb-3">{group.description}</p>
+              
+              <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
+                <Users className="w-3 h-3 text-cyan-400/50" />
+                <span>Created by {shortenAddress(group.owner)}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -612,41 +725,12 @@ export const Group: React.FC = () => {
       </div>
 
       {/* Content Area */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-0 py-8">
+      <div className="max-w-7xl mx-auto px-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Sidebar - Quick Actions */}
-          <div className="lg:col-span-3">
-            <QuickActions
-              isOwner={isOwner}
-              isJoined={isJoined}
-              distributionSet={distributionSet}
-              onMintNFT={() => setShowBuyModal(true)}
-              onGiftNFT={() => setShowGiftModal(true)}
-              onDistribute={() => setShowDistributeModal(true)}
-              onCheckAirdrop={() => setShowClaimModal(true)}
-              onCreatePost={() => setShowCreatePostModal(true)}
-              canPost={userNFTBalance > 0 || userTokenBalance > 0}
-            />
 
-            {/* Quick Stats */}
-            <div className="flex flex-col gap-2 sm:gap-3 mt-16 w-full sm:w-auto sm:min-w-[240px]">
-              <div className="flex gap-2 sm:gap-4">
-                <div className="bg-cyan-500/5 rounded-lg p-2 sm:p-3 text-center flex-1">
-                  <div className="text-base sm:text-lg font-bold text-cyan-400 break-words leading-tight font-mono"> <span>{memberCount}</span></div>
-                  <div className="text-[9px] sm:text-[10px] text-cyan-400/70 mt-0.5 whitespace-nowrap uppercase tracking-wider">Member{memberCount !== 1 ? 's' : ''}</div>
-                </div>
-                <div className="bg-purple-500/5 rounded-lg p-2 sm:p-3 text-center flex-1">
-                  <div className="text-base sm:text-lg font-bold text-purple-400 leading-tight font-mono">{postCount}</div>
-                  <div className="text-[9px] sm:text-[10px] text-purple-400/70 mt-0.5 whitespace-nowrap uppercase tracking-wider">Posts</div>
-                </div>
-              </div>
-          
-            </div>
-
-          </div>
 
           {/* Main Content - Center */}
-          <div className="lg:col-span-6">
+          <div className="lg:col-span-9">
             {/* Keep PostsFeed mounted but hidden to preserve state */}
             <div style={{ display: activeTab === 'posts' ? 'block' : 'none' }}>
               <PostsFeed
@@ -845,7 +929,7 @@ export const Group: React.FC = () => {
                       <svg className="w-16 h-16 mx-auto text-cyan-400/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                       </svg>
-                      <p className="text-gray-300 font-medium">No HASHD Genesis Keys minted yet</p>
+                      <p className="text-gray-300 font-medium">No Genesis Keys minted yet</p>
                       <p className="text-sm text-gray-400 mt-1">Be the first to mint a Genesis Key!</p>
                     </div>
                   ) : (
@@ -853,31 +937,35 @@ export const Group: React.FC = () => {
                       {nftHolders.map((holder) => (
                         <div
                           key={holder.tokenId}
-                          className="bg-white border border-neutral-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group"
+                          className="bg-gray-800/50 border border-cyan-500/20 rounded-lg overflow-hidden hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all cursor-pointer group"
                         >
-                          <div className="aspect-square bg-gradient-to-br from-primary-100 to-blue-100 relative overflow-hidden">
+                          <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 relative overflow-hidden">
                             <GuildImage
-                              imageURI={group.imageURI}
+                              imageURI={
+                                holder.metadata?.image 
+                                  ? holder.metadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/')
+                                  : group.imageURI
+                              }
                               alt={`${group.nftName} #${holder.tokenId}`}
                               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-3">
-                              <span className="text-white font-bold text-sm">#{holder.tokenId}</span>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-3">
+                              <span className="text-cyan-300 font-bold text-sm">#{holder.tokenId}</span>
                             </div>
                           </div>
                           <div className="p-3">
-                            <p className="text-xs font-semibold text-neutral-900 mb-1">
-                              {group.nftName} #{holder.tokenId}
+                            <p className="text-xs font-semibold text-cyan-100 mb-1">
+                              {holder.metadata?.name || `${group.nftName} #${holder.tokenId}`}
                             </p>
                             <div className="flex items-center gap-1">
-                              <svg className="w-3 h-3 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                               </svg>
                               <a
                                 href={`${EXPLORER_URL}/address/${holder.owner}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-xs text-neutral-600 hover:text-primary-600 font-mono"
+                                className="text-xs text-gray-400 hover:text-cyan-400 font-mono transition-colors"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {shortenAddress(holder.owner)}
@@ -895,7 +983,37 @@ export const Group: React.FC = () => {
 
           {/* Right Sidebar - Suggested Groups */}
           <div className="lg:col-span-3">
-            <SuggestedGroups />
+
+  
+            <QuickActions
+              isOwner={isOwner}
+              isJoined={isJoined}
+              distributionSet={distributionSet}
+              onMintNFT={() => setShowBuyModal(true)}
+              onGiftNFT={() => setShowGiftModal(true)}
+              onDistribute={() => setShowDistributeModal(true)}
+              onCheckAirdrop={() => setShowClaimModal(true)}
+              onCreatePost={() => setShowCreatePostModal(true)}
+              onEditGroupInfo={() => setShowEditGroupModal(true)}
+              canPost={userNFTBalance > 0 || userTokenBalance > 0}
+            />
+
+          {/* Quick Stats */}
+            <div className="flex flex-col gap-2 sm:gap-3 mt-6 w-full sm:w-auto sm:min-w-[240px]">
+              <div className="flex gap-2 sm:gap-4">
+                <div className="bg-cyan-500/5 rounded-lg p-2 sm:p-3 text-center flex-1">
+                  <div className="text-base sm:text-lg font-bold text-cyan-400 break-words leading-tight font-mono"> <span>{memberCount}</span></div>
+                  <div className="text-[9px] sm:text-[10px] text-cyan-400/70 mt-0.5 whitespace-nowrap uppercase tracking-wider">Member{memberCount !== 1 ? 's' : ''}</div>
+                </div>
+                <div className="bg-purple-500/5 rounded-lg p-2 sm:p-3 text-center flex-1">
+                  <div className="text-base sm:text-lg font-bold text-purple-400 leading-tight font-mono">{postCount}</div>
+                  <div className="text-[9px] sm:text-[10px] text-purple-400/70 mt-0.5 whitespace-nowrap uppercase tracking-wider">Posts</div>
+                </div>
+              </div>
+          
+            </div>
+
+
           </div>
         </div>
       </div>
@@ -904,7 +1022,12 @@ export const Group: React.FC = () => {
       <BuyNFTModal
         isOpen={showBuyModal}
         nftPrice={group.nftPrice || '0'}
-        onClose={() => setShowBuyModal(false)}
+        nftName={group.nftName || 'Genesis Key'}
+        groupImageURI={group.imageURI || ''}
+        onClose={() => {
+          setShowBuyModal(false);
+          loadGroupData(); // Refresh data after modal closes
+        }}
         onBuy={handleBuyNFT}
       />
 
@@ -914,6 +1037,26 @@ export const Group: React.FC = () => {
         onClose={() => setShowGiftModal(false)}
         onGift={handleGiftNFT}
       />
+
+      {/* Edit Group Info Modal */}
+      {showEditGroupModal && group && (
+        <EditGroupInfoModal
+          isOpen={showEditGroupModal}
+          onClose={() => setShowEditGroupModal(false)}
+          tokenAddress={group.tokenAddress}
+          currentInfo={{
+            title: group.title || '',
+            description: group.description || '',
+            imageURI: group.imageURI || '',
+            headerImageURI: group.headerImageURI || ''
+          }}
+          hashIdToken={hashIdToken}
+          onUpdate={() => {
+            setShowEditGroupModal(false);
+            loadGroupData();
+          }}
+        />
+      )}
 
       {/* Distribute Token Modal */}
       {showDistributeModal && group && (
@@ -943,14 +1086,20 @@ export const Group: React.FC = () => {
           hasToken={userTokenBalance > 0}
           isMember={isJoined}
           relayerUrl="http://localhost:3001"
-          onPostCreated={async (ipfsHash: string, accessLevel: number) => {
-            console.log('📝 Creating post on-chain with CID:', ipfsHash, 'Access level:', accessLevel);
+          hashIdToken={hashIdToken || undefined}
+          onPostCreated={async (contentHash: string, accessLevel: number) => {
+            console.log('📝 Creating post on-chain with CID:', contentHash, 'Access level:', accessLevel);
             
-            // Create post on blockchain
+            if (!hashIdToken) {
+              throw new Error('No HASHD ID found. Please register or link a HASHD ID first.');
+            }
+            
+            // Create post on blockchain (pass hashIdToken as string, contract will handle conversion)
             const tx = await contractService.createPost(
               group.postsAddress,
-              ipfsHash,
-              accessLevel
+              contentHash,
+              accessLevel,
+              hashIdToken
             );
             
             console.log('⏳ Waiting for transaction confirmation...');

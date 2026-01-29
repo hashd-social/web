@@ -143,7 +143,7 @@ export const CurrentMailbox: React.FC<CurrentMailboxProps> = ({
                   </span>
                   {hasHashID && (
                     <span className="px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/30 rounded text-xs font-mono neon-text-cyan">
-                      HASHDTAG
+                      HashID
                     </span>
                   )}
                   {!hasHashID && (

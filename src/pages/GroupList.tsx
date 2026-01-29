@@ -9,7 +9,7 @@ import { TabBar, Tab } from '../components/TabBar';
 import { Tooltip, RoyaltyTooltip } from '../components/Tooltip';
 import { useNotify } from '../components/Toast';
 import { GuildImage } from '../components/GuildImage';
-import { bytes32ToHashdUrl } from '../utils/cid';
+import { bytes32ToCid } from '../utils/contracts';
 
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 const USER_PROFILE_ADDRESS = process.env.REACT_APP_USER_PROFILE || '';
@@ -105,18 +105,21 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
       rpcCallCount += groupCount; // N parallel calls
       console.log(`✅ [GroupList] Loaded ${groupCount} guilds in ${Date.now() - stepStart}ms (${groupCount} parallel RPC calls)`);
       
-      const loadedGroups: Group[] = groupResults.map((group, i) => ({
-        title: group.title,
-        description: group.description,
-        avatarCID: group.avatarCID,
-        headerCID: group.headerCID,
-        imageURI: bytes32ToHashdUrl(group.avatarCID), // Convert bytes32 to hashd:// URL
-        owner: group.owner,
-        tokenAddress: group.tokenAddress,
-        nftAddress: group.nftAddress,
-        postsAddress: group.postsAddress,
-        index: i
-      }));
+      const loadedGroups: Group[] = groupResults.map((group, i) => {
+        const cid = bytes32ToCid(group.avatarCID);
+        return {
+          title: group.title,
+          description: group.description,
+          avatarCID: group.avatarCID,
+          headerCID: group.headerCID,
+          imageURI: cid ? `hashd://${cid}` : '', // Convert bytes32 to hashd:// URL
+          owner: group.owner,
+          tokenAddress: group.tokenAddress,
+          nftAddress: group.nftAddress,
+          postsAddress: group.postsAddress,
+          index: i
+        };
+      });
 
       const reversedGroups = loadedGroups.reverse(); // Show newest first
       setGroups(reversedGroups);
@@ -449,7 +452,7 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
             className="cyber-card bg-gray-800/50 relative overflow-hidden cursor-pointer transition-all group"
           >
             {/* Compact Group Image */}
-            <div className="h-32 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden">
+            <div className="h-64 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden">
               <GuildImage
                 imageURI={group.imageURI}
                 alt={group.title}

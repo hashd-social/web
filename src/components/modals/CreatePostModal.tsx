@@ -13,8 +13,9 @@ interface CreatePostModalProps {
   hasNFT?: boolean;
   hasToken?: boolean;
   isMember?: boolean;
-  onPostCreated: (ipfsHash: string, accessLevel: number) => Promise<void>;
+  onPostCreated: (contentHash: string, accessLevel: number) => Promise<void>;
   relayerUrl?: string;
+  hashIdToken?: string;
 }
 
 export const CreatePostModal: React.FC<CreatePostModalProps> = ({
@@ -28,18 +29,18 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   hasToken = false,
   isMember = false,
   onPostCreated,
-  relayerUrl
+  relayerUrl,
+  hashIdToken
 }) => {
-  const handlePostCreated = async (ipfsHash: string, accessLevel: number) => {
+  const handlePostCreated = async (contentHash: string, accessLevel: number) => {
     try {
-      await onPostCreated(ipfsHash, accessLevel);
-      // Wait a moment before closing to show success
-      setTimeout(() => {
-        onClose();
-      }, 1000);
+      await onPostCreated(contentHash, accessLevel);
+      // Don't close here - let CreatePost component handle the full flow including ByteCave upload
+      // The modal will close after the 2-second success message display in CreatePost
     } catch (error) {
       // Don't close on error - let user see the error message
       console.error('Post creation failed:', error);
+      throw error; // Re-throw so CreatePost can handle it
     }
   };
 
@@ -61,7 +62,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           hasToken={hasToken}
           isMember={isMember}
           onPostCreated={handlePostCreated}
+          onComplete={onClose}
           relayerUrl={relayerUrl}
+          hashIdToken={hashIdToken}
         />
       </div>
     </NeonModal>

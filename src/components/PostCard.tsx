@@ -39,6 +39,7 @@ interface PostCardProps {
   onUpvote: (postId: number) => Promise<void>;
   onDelete?: (postId: number) => Promise<void>;
   onComment: (postId: number) => void;
+  onLoadFailed?: (postId: number) => void;
 }
 
 export default function PostCard({
@@ -60,7 +61,8 @@ export default function PostCard({
   groupTokenAddress,
   onUpvote,
   onDelete,
-  onComment
+  onComment,
+  onLoadFailed
 }: PostCardProps) {
   const navigate = useNavigate();
   const { vaultPrimaryNode } = useSettingsStore();
@@ -100,9 +102,9 @@ export default function PostCard({
       case AccessLevel.PUBLIC:
         return { label: 'Public', icon: Globe, color: 'gray' };
       case AccessLevel.MEMBERS_ONLY:
-        return { label: 'Members Only', icon: Users, color: 'blue' };
+        return { label: 'Guild Members', icon: Users, color: 'blue' };
       case AccessLevel.TOKEN_HOLDERS:
-        return { label: 'Token Holders', icon: Coins, color: 'green' };
+        return { label: 'ERC20 Token Holders', icon: Coins, color: 'green' };
       case AccessLevel.NFT_HOLDERS:
         return { label: 'NFT Holders', icon: Award, color: 'purple' };
       default:
@@ -126,8 +128,17 @@ export default function PostCard({
       const decrypted = await downloadAndDecryptPost(contentHash, groupKey);
       setContent(decrypted);
     } catch (err) {
-      console.error('Error loading post:', err);
+      const error = err as Error;
+      // Only log unexpected errors - missing content is expected
+      if (!error.message.includes('BLOB_NOT_FOUND') && !error.message.includes('All nodes failed')) {
+        console.error('Error loading post:', err);
+      }
       setError('Failed to load post');
+      
+      // Notify parent that this post failed to load (likely missing ByteCave content)
+      if (onLoadFailed && canView()) {
+        onLoadFailed(postId);
+      }
     } finally {
       setIsLoading(false);
     }

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Image as ImageIcon, X, Loader2 as Loader, Download, Check, Copy, Send, ChevronDown, Upload, CheckCircle, Globe, Users, Coins, Award } from 'lucide-react';
 import { encryptContent, PostContent, AccessLevel, uploadToVault } from '../services/ipfs/groupPosts';
 import { ethers } from 'ethers';
+import { useByteCaveContext } from '@gethashd/bytecave-browser';
 
 interface ProgressStep {
   label: string;
@@ -15,10 +16,12 @@ interface CreatePostProps {
   groupKey: string;
   userAddress: string;
   onPostCreated: (contentHash: string, accessLevel: number) => Promise<void>;
+  onComplete?: () => void;
   hasNFT?: boolean;
   hasToken?: boolean;
   isMember?: boolean;
-  relayerUrl?: string; // Optional relayer backend
+  relayerUrl?: string;
+  hashIdToken?: string;
 }
 
 export default function CreatePost({
@@ -27,11 +30,14 @@ export default function CreatePost({
   groupKey,
   userAddress,
   onPostCreated,
+  onComplete,
   hasNFT = false,
   hasToken = false,
   isMember = false,
-  relayerUrl
+  relayerUrl,
+  hashIdToken
 }: CreatePostProps) {
+  const { store } = useByteCaveContext();
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const [image, setImage] = useState<string | null>(null);
@@ -201,16 +207,14 @@ export default function CreatePost({
     
     // Initialize progress steps
     setProgressSteps([
-      { label: 'Checking membership', status: 'active', message: 'Verifying you can post...' },
+      { label: 'Encrypting content', status: 'active', message: 'Encrypting with group key...' },
+      { label: 'Registering content', status: 'pending' },
       { label: 'Uploading to ByteCave', status: 'pending' },
       { label: 'Publishing post', status: 'pending' }
     ]);
 
     try {
-      // Step 1: Check membership (simulated - actual check happens in relayer)
-      updateStep(0, 'complete', 'Membership verified');
-      
-      // Prepare content and encrypt
+      // Step 1: Prepare content and encrypt
       const content: PostContent = {
         title: title.trim(),
         text: text.trim(),
@@ -220,27 +224,63 @@ export default function CreatePost({
       };
 
       const encrypted = await encryptContent(content, groupKey);
-      const hash = ethers.keccak256(encrypted);
-
-      // Step 2: Upload to ByteCave vault
-      updateStep(1, 'active', 'Uploading to ByteCave...');
       
-      const cid = await uploadToVault(encrypted, userAddress, groupPostsAddress);
-      updateStep(1, 'complete', `Uploaded to vault: ${cid.slice(0, 8)}...`);
+      // Calculate CID for on-chain registration
+      const arrayBuffer = encrypted.buffer.slice(encrypted.byteOffset, encrypted.byteOffset + encrypted.byteLength) as ArrayBuffer;
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const cid = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      updateStep(0, 'complete', 'Content encrypted');
 
-      // Step 3: Publishing post on-chain
-      updateStep(2, 'active', 'Please sign the transaction...');
+      // Step 2: Register content on-chain (GroupPosts.createPost registers in ContentRegistry)
+      updateStep(1, 'active', 'Please sign the transaction...');
+      
+      if (!hashIdToken) {
+        throw new Error('No HASHD ID found. Please register a HASHD ID first.');
+      }
+      
+      // Call GroupPosts.createPost - this registers the CID in ContentRegistry
       await onPostCreated(cid, accessLevel);
-      updateStep(2, 'complete', 'Post published successfully!');
+      updateStep(1, 'complete', 'Content registered on-chain');
 
-      // Wait a moment to show completion
+      // Step 3: Upload to ByteCave vault via P2P (now authorized by on-chain registration)
+      updateStep(2, 'active', 'Uploading to ByteCave P2P...');
+      
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      
+      const storeResult = await store(encrypted, 'application/octet-stream', signer, Number(hashIdToken));
+      
+      if (!storeResult.success || !storeResult.cid) {
+        throw new Error(storeResult.error || 'Failed to upload to ByteCave');
+      }
+      
+      // Verify the CID matches what we registered
+      if (storeResult.cid !== cid) {
+        console.warn('⚠️ ByteCave CID mismatch:', { expected: cid, received: storeResult.cid });
+      }
+      
+      updateStep(2, 'complete', `Uploaded: ${storeResult.cid.slice(0, 8)}...`);
+
+      // Step 4: Complete
+      updateStep(3, 'active', 'Finalizing...');
+      updateStep(3, 'complete', 'Post published successfully!');
+
+      // Wait a moment to show completion before modal closes
       setTimeout(() => {
         // Reset form
         setText('');
+        setTitle('');
         setImage(null);
         setAccessLevel(AccessLevel.MEMBERS_ONLY);
         setShowProgress(false);
         setProgressSteps([]);
+        
+        // Notify parent that everything is complete
+        if (onComplete) {
+          onComplete();
+        }
       }, 2000);
     } catch (err) {
       console.error('Error creating post:', err);
@@ -561,10 +601,10 @@ export default function CreatePost({
 
       {/* Progress Modal */}
       {showProgress && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900/95 rounded-lg shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold neon-text-cyan uppercase tracking-wider font-mono">Creating Post</h3>
+        <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-50 rounded-lg">
+          <div className="w-full h-full flex flex-col p-8">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-md font-bold neon-text-cyan uppercase tracking-wider font-mono">Creating Post...</h3>
               {!isUploading && (
                 <button
                   onClick={() => {
@@ -572,9 +612,9 @@ export default function CreatePost({
                     setProgressSteps([]);
                     setError(null);
                   }}
-                  className="p-1 hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5 text-gray-400" />
+                  <X className="w-6 h-6 text-gray-400" />
                 </button>
               )}
             </div>
