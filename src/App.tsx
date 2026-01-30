@@ -485,6 +485,29 @@ function App() {
       }
     }
     
+    // Get account count to determine proper account index naming
+    let accountCount = 0;
+    try {
+      accountCount = await contractService.getAccountCount(walletAddr);
+    } catch (error) {
+      console.warn('Could not get account count:', error);
+    }
+    
+    // Build map of publicKeyHash to account index for proper "Account N" naming
+    const publicKeyHashToIndex = new Map<string, number>();
+    for (let i = 0; i < accountCount; i++) {
+      try {
+        const account = await contractService.getAccount(walletAddr, i);
+        if (account.isActive) {
+          const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(account.publicKey);
+          const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
+          publicKeyHashToIndex.set(publicKeyHash, i);
+        }
+      } catch (error) {
+        console.warn(`Could not get account at index ${i}:`, error);
+      }
+    }
+    
     // Match mailboxes to named accounts using publicKeyHash
     const resolvedMailboxes = loadedMailboxes.map((mailbox, index) => {
       const matchedInfo = publicKeyHashToInfo.get(mailbox.publicKeyHash);
@@ -500,18 +523,26 @@ function App() {
         };
       }
       
-      // If no account found, preserve existing name (including custom names for Bare Accounts)
-      // Only use fallback if name is generic (starts with 'Mailbox' or 'Main')
-      let preservedName = mailbox.name;
+      // No HashID matched - this is a bare account
+      // Get the proper account index from blockchain
+      const accountIndex = publicKeyHashToIndex.get(mailbox.publicKeyHash);
+      const defaultName = accountIndex !== undefined ? `Account ${accountIndex + 1}` : `Mailbox ${index + 1}`;
       
-      if (!mailbox.name || mailbox.name.startsWith('Mailbox ') || mailbox.name === 'Main') {
-        // Generic name - use fallback
-        preservedName = index === 0 ? 'Main' : `Mailbox ${index + 1}`;
+      // If mailbox has a HashID-style name (contains @) but no match, the HashID was detached
+      if (mailbox.name && mailbox.name.includes('@')) {
+        console.log(`🔄 Clearing detached HashID name "${mailbox.name}" -> "${defaultName}"`);
+        return { ...mailbox, name: defaultName };
       }
-      // Otherwise preserve whatever name is there (including 'Bare Account' or custom names)
       
-      console.log(`🔄 No blockchain account for mailbox ${index}, preserving name: ${preservedName}`);
-      return { ...mailbox, name: preservedName };
+      // If no name or generic name, use default
+      if (!mailbox.name || mailbox.name.startsWith('Mailbox ') || mailbox.name === 'Main') {
+        console.log(`🔄 Using default name for mailbox ${index}: ${defaultName}`);
+        return { ...mailbox, name: defaultName };
+      }
+      
+      // Otherwise preserve custom name (user-renamed bare accounts)
+      console.log(`🔄 Preserving custom name for mailbox ${index}: ${mailbox.name}`);
+      return { ...mailbox, name: mailbox.name };
     });
     
     // Update localStorage with resolved names using centralized method

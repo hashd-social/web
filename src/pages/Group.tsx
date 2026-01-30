@@ -996,6 +996,7 @@ export const Group: React.FC = () => {
               onCreatePost={() => setShowCreatePostModal(true)}
               onEditGroupInfo={() => setShowEditGroupModal(true)}
               canPost={userNFTBalance > 0 || userTokenBalance > 0}
+              hasHashId={!!hashIdToken}
             />
 
           {/* Quick Stats */}

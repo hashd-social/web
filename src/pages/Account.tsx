@@ -70,14 +70,17 @@ export const Account: React.FC<AccountProps> = ({
               const publicKeyHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
               const localMailbox = mailboxes.find(m => m.publicKeyHash === publicKeyHash);
               
+              // Use "Account 1", "Account 2", etc. based on account index
+              const defaultName = `Account ${i + 1}`;
+              
               // If localStorage has a HashID-style name (contains @) but blockchain says it's bare,
-              // the HashID was detached - update localStorage to show "Bare Account"
-              let displayName = localMailbox?.name || 'Bare Account';
+              // the HashID was detached - update localStorage to show account index
+              let displayName = localMailbox?.name || defaultName;
               if (localMailbox?.name && localMailbox.name.includes('@')) {
                 console.log(`🔄 Clearing stale HashID name "${localMailbox.name}" from localStorage`);
-                displayName = 'Bare Account';
+                displayName = defaultName;
                 // Update localStorage to clear the stale name
-                SimpleKeyManager.renameMailbox(userAddress, publicKeyHash, 'Bare Account');
+                SimpleKeyManager.renameMailbox(userAddress, publicKeyHash, defaultName);
               }
               
               accounts.push({ 
@@ -98,6 +101,9 @@ export const Account: React.FC<AccountProps> = ({
       // Always set accounts, even if some fetches failed
       console.log('📦 Total accounts to display:', accounts.length, accounts);
       setBlockchainAccounts(accounts);
+      
+      // Refresh mailboxes to update current mailbox display
+      onRefreshMailboxes();
     };
 
   // Sync mailbox metadata (names, timestamps) with blockchain accounts

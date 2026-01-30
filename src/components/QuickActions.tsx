@@ -12,6 +12,7 @@ interface QuickActionsProps {
   onCreatePost?: () => void;
   onEditGroupInfo?: () => void;
   canPost?: boolean;
+  hasHashId?: boolean;
 }
 
 export const QuickActions: React.FC<QuickActionsProps> = ({
@@ -25,6 +26,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
   onCreatePost,
   onEditGroupInfo,
   canPost = false,
+  hasHashId = true,
 }) => {
   return (
     <div className="card">
@@ -32,7 +34,12 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         {/* Create Post Section */}
         {onCreatePost && (
           <div>
-            <button onClick={onCreatePost} disabled={!isJoined} className="btn btn-cyber btn-block">
+            <button 
+              onClick={onCreatePost} 
+              disabled={!isJoined || !hasHashId} 
+              className="btn btn-cyber btn-block"
+              title={!hasHashId ? 'You need a HashID attached to create posts' : ''}
+            >
               <PenSquare className="w-4 h-4" />
               Create Post
             </button>
