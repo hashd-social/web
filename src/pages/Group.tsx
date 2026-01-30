@@ -82,7 +82,7 @@ export const Group: React.FC = () => {
   const avatarImgRef = React.useRef<HTMLImageElement>(null);
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const [postCount, setPostCount] = useState(0);
-  const { hashIdToken } = useCurrentHashId(userAddress);
+  const { hashIdToken, accountIndex, publicKey, loading: hashIdLoading } = useCurrentHashId(userAddress);
 
   useEffect(() => {
     findGroupIndexByAddress();
@@ -93,8 +93,15 @@ export const Group: React.FC = () => {
     if (groupIndex !== null) {
       loadGroupData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIndex]);
+
+  // Reload membership when HashID finishes loading
+  useEffect(() => {
+    if (!hashIdLoading && group && userAddress && USER_PROFILE_ADDRESS) {
+      loadMembershipData(group.tokenAddress, userAddress);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hashIdLoading, hashIdToken, group?.tokenAddress, userAddress]);
 
 
   const findGroupIndexByAddress = async () => {
@@ -249,14 +256,10 @@ export const Group: React.FC = () => {
         nftPrice: ethers.formatEther(nftPrice)
       });
 
-      // Load NFT holders and membership in background (don't block UI)
-      Promise.all([
-        loadNFTHolders(groupInfo.nftAddress, Number(nftMinted)),
-        userAddr && USER_PROFILE_ADDRESS 
-          ? loadMembershipData(groupInfo.tokenAddress, userAddr)
-          : Promise.resolve()
-      ]).catch(err => {
-        console.error('Failed to load background data:', err);
+      // Load NFT holders in background (don't block UI)
+      // Note: Membership loading is handled by useEffect when hashIdToken is ready
+      loadNFTHolders(groupInfo.nftAddress, Number(nftMinted)).catch(err => {
+        console.error('Failed to load NFT holders:', err);
       });
     } catch (err: any) {
       console.error('❌ Error loading guild:', err);
@@ -268,6 +271,12 @@ export const Group: React.FC = () => {
 
   const loadMembershipData = async (tokenAddress: string, userAddr: string) => {
     if (!USER_PROFILE_ADDRESS || !window.ethereum) {
+      console.log('[Group] Skipping membership check - missing requirements:', {
+        hasUserProfile: !!USER_PROFILE_ADDRESS,
+        hasEthereum: !!window.ethereum
+      });
+      setIsJoined(false);
+      setMemberCount(0);
       return;
     }
     
@@ -276,16 +285,40 @@ export const Group: React.FC = () => {
       const provider = contractService.getReadProvider();
       const userProfile = new ethers.Contract(USER_PROFILE_ADDRESS, USER_PROFILE_ABI, provider);
       
-      // No timeout - let it take as long as it needs
+      console.log('[Group] ========================================');
+      console.log('[Group] Checking membership for wallet:', userAddr);
+      console.log('[Group] Current HashID Token:', hashIdToken || 'No HashID');
+      console.log('[Group] Group Token Address:', tokenAddress);
+      console.log('[Group] UserProfile Contract:', USER_PROFILE_ADDRESS);
+      
+      // Try to get the public key that will actually be checked
+      if (accountIndex !== null) {
+        try {
+          const publicKey = await userProfile._getCallerPublicKeyView(userAddr, accountIndex);
+          console.log('[Group] Public key for account index', accountIndex, ':', publicKey);
+        } catch (pkErr: any) {
+          console.log('[Group] Could not get public key:', pkErr.message);
+        }
+      }
+      
+      // Check membership using account index (default to 0 if not available)
+      const indexToUse = accountIndex !== null ? accountIndex : 0;
+      const membershipCheck = userProfile.hasJoinedGroup(userAddr, tokenAddress, indexToUse);
+      
       const [joined, count] = await Promise.all([
-        userProfile.hasJoinedGroup(userAddr, tokenAddress),
+        membershipCheck,
         userProfile.getGroupMemberCount(tokenAddress)
       ]);
+      
+      console.log('[Group] ----------------------------------------');
+      console.log('[Group] Membership check result:', joined ? '✅ JOINED' : '❌ NOT JOINED');
+      console.log('[Group] Total member count:', Number(count));
+      console.log('[Group] ========================================');
       
       setIsJoined(joined);
       setMemberCount(Number(count));
     } catch (err: any) {
-      console.error('Error loading membership data:', err);
+      console.error('[Group] Error loading membership data:', err);
       // Set defaults on error
       setIsJoined(false);
       setMemberCount(0);
@@ -293,7 +326,15 @@ export const Group: React.FC = () => {
   };
 
   const handleJoinGroup = async () => {
-    if (!group || !userAddress || !USER_PROFILE_ADDRESS || !window.ethereum) return;
+    if (!group || !userAddress || !USER_PROFILE_ADDRESS || !window.ethereum) {
+      console.error('Missing requirements to join group:', {
+        hasGroup: !!group,
+        hasUserAddress: !!userAddress,
+        hasUserProfile: !!USER_PROFILE_ADDRESS,
+        hasEthereum: !!window.ethereum
+      });
+      return;
+    }
     
     setIsJoining(true);
     
@@ -302,7 +343,9 @@ export const Group: React.FC = () => {
     const userProfile = new ethers.Contract(USER_PROFILE_ADDRESS, USER_PROFILE_ABI, signer);
     
     try {
-      const tx = await userProfile.joinGroup(group.tokenAddress);
+      const indexToUse = accountIndex !== null ? accountIndex : 0;
+      console.log('[Group] Joining group with account index:', indexToUse);
+      const tx = await userProfile.joinGroup(group.tokenAddress, indexToUse);
       await tx.wait();
       
       // Update local state
@@ -320,7 +363,8 @@ export const Group: React.FC = () => {
         console.log('Transaction already submitted, checking membership...');
         // Check if user is actually a member now
         try {
-          const isMember = await userProfile.isMember(userAddress, group.tokenAddress);
+          const indexToUse = accountIndex !== null ? accountIndex : 0;
+          const isMember = await userProfile.hasJoinedGroup(userAddress, group.tokenAddress, indexToUse);
           if (isMember) {
             console.log('✅ User is already a member, reloading...');
             window.location.reload();
@@ -347,23 +391,26 @@ export const Group: React.FC = () => {
     if (!group || !userAddress || !USER_PROFILE_ADDRESS || !window.ethereum) return;
     
     setIsJoining(true);
+    
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const userProfile = new ethers.Contract(USER_PROFILE_ADDRESS, USER_PROFILE_ABI, signer);
+    
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const userProfile = new ethers.Contract(USER_PROFILE_ADDRESS, USER_PROFILE_ABI, signer);
-      
-      const tx = await userProfile.leaveGroup(group.tokenAddress);
+      const indexToUse = accountIndex !== null ? accountIndex : 0;
+      console.log('[Group] Leaving group with account index:', indexToUse);
+      const tx = await userProfile.leaveGroup(group.tokenAddress, indexToUse);
       await tx.wait();
       
       // Update local state
       setIsJoined(false);
       setMemberCount(prev => Math.max(prev - 1, 0));
       
-      // Reload the page to refresh all data
-      window.location.reload();
+      notify.success('Successfully left group');
+      setIsJoining(false);
     } catch (err: any) {
       console.error('Error leaving group:', err);
-      notify.error(err.message || 'Failed to leave guild');
+      notify.error(err.message || 'Failed to leave group');
       setIsJoining(false);
     }
   };
@@ -744,6 +791,8 @@ export const Group: React.FC = () => {
                 isMember={isJoined}
                 contractService={contractService}
                 refreshTrigger={postCount}
+                currentUserHashIdToken={hashIdToken ? BigInt(hashIdToken) : null}
+                currentUserPublicKey={publicKey}
               />
             </div>
 

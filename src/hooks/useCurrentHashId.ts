@@ -5,6 +5,8 @@ import { SimpleKeyManager, SimpleCryptoUtils } from '../utils/crypto-simple';
 interface CurrentHashIdInfo {
   hashIdToken: string | null;
   hashIdName: string | null;
+  accountIndex: number | null;
+  publicKey: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -16,14 +18,19 @@ interface CurrentHashIdInfo {
 export const useCurrentHashId = (userAddress: string | null): CurrentHashIdInfo => {
   const [hashIdToken, setHashIdToken] = useState<string | null>(null);
   const [hashIdName, setHashIdName] = useState<string | null>(null);
+  const [accountIndex, setAccountIndex] = useState<number | null>(null);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    
     const fetchCurrentHashId = async () => {
       if (!userAddress) {
         setHashIdToken(null);
         setHashIdName(null);
+        setAccountIndex(null);
         setLoading(false);
         return;
       }
@@ -38,6 +45,7 @@ export const useCurrentHashId = (userAddress: string | null): CurrentHashIdInfo 
           setError('No mailboxes found');
           setHashIdToken(null);
           setHashIdName(null);
+          setAccountIndex(null);
           setLoading(false);
           return;
         }
@@ -52,33 +60,56 @@ export const useCurrentHashId = (userAddress: string | null): CurrentHashIdInfo 
 
         // Get all accounts for this user
         const accounts = await contractService.getAccounts(userAddress);
+        
+        console.log('[useCurrentHashId] Current mailbox:', {
+          publicKeyHash: currentMailbox.publicKeyHash,
+          name: currentMailbox.name
+        });
+        console.log('[useCurrentHashId] Blockchain accounts:', accounts.map(acc => ({
+          publicKey: acc.publicKey,
+          hasHashID: acc.hasHashIDAttached,
+          hashIDName: acc.hashIDName,
+          tokenId: acc.hashIDTokenId.toString()
+        })));
 
-        // Find account that matches current mailbox's public key
-        const matchingAccount = accounts.find(acc => {
-          if (!acc.isActive || !acc.hasHashIDAttached) return false;
+        // Find account that matches current mailbox's public key hash and get its index
+        let matchingAccount = null;
+        let matchingIndex = -1;
+        
+        for (let i = 0; i < accounts.length; i++) {
+          const acc = accounts[i];
+          if (!acc.isActive || !acc.hasHashIDAttached) continue;
 
-          // Compare public keys
-          if (currentMailbox.publicKey) {
-            return acc.publicKey.toLowerCase() === currentMailbox.publicKey.toLowerCase();
-          }
-
-          // Fall back to comparing public key hash
+          // Compare public key hash (first 16 bytes of public key)
           if (currentMailbox.publicKeyHash) {
             const publicKeyBytes = SimpleCryptoUtils.publicKeyFromHex(acc.publicKey);
             const accountHash = SimpleCryptoUtils.bytesToHex(publicKeyBytes.slice(0, 16));
-            return currentMailbox.publicKeyHash === accountHash;
+            if (currentMailbox.publicKeyHash === accountHash) {
+              matchingAccount = acc;
+              matchingIndex = i;
+              break;
+            }
           }
+        }
 
-          return false;
-        });
+        console.log('[useCurrentHashId] Matching account:', matchingAccount ? {
+          hashIDName: matchingAccount.hashIDName,
+          tokenId: matchingAccount.hashIDTokenId.toString(),
+          publicKey: matchingAccount.publicKey,
+          accountIndex: matchingIndex
+        } : 'NOT FOUND');
 
-        if (matchingAccount) {
+        if (matchingAccount && matchingIndex >= 0) {
           setHashIdToken(matchingAccount.hashIDTokenId.toString());
           setHashIdName(matchingAccount.hashIDName);
+          setAccountIndex(matchingIndex);
+          setPublicKey(matchingAccount.publicKey);
         } else {
           setError('Current mailbox does not have a HashID attached');
           setHashIdToken(null);
           setHashIdName(null);
+          setAccountIndex(null);
+          setPublicKey(null);
         }
 
         setLoading(false);
@@ -87,6 +118,8 @@ export const useCurrentHashId = (userAddress: string | null): CurrentHashIdInfo 
         setError(err.message || 'Failed to fetch HashID');
         setHashIdToken(null);
         setHashIdName(null);
+        setAccountIndex(null);
+        setPublicKey(null);
         setLoading(false);
       }
     };
@@ -97,6 +130,8 @@ export const useCurrentHashId = (userAddress: string | null): CurrentHashIdInfo 
   return {
     hashIdToken,
     hashIdName,
+    accountIndex,
+    publicKey,
     loading,
     error
   };

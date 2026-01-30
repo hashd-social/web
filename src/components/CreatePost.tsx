@@ -307,7 +307,7 @@ export default function CreatePost({
           <div className="flex-1">
             <h3 className="text-lg font-bold text-yellow-400 mb-2 uppercase tracking-wider font-mono">Join Guild to Post</h3>
             <p className="text-sm text-gray-300">
-              You must be a member of this guild to create posts. Click the "Join Guild" button above.
+              You must be a member of this guild to create posts. Click the "Join Guild" button.
             </p>
 
           </div>

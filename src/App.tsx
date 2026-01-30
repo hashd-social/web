@@ -1462,7 +1462,7 @@ function App() {
   // Show connect screen only if NOT connected AND not loading
   if (!state.isConnected && !state.loading) {
     // Public pages that don't need wallet connection
-    const publicPages = ['/waitlist', '/verify-email', '/email-verified', '/faq', '/about', '/privacy', '/terms', '/support', '/documentation'];
+    const publicPages = ['/waitlist', '/verify-email', '/email-verified', '/faq', '/about', '/privacy', '/terms', '/support', '/documentation', '/styleguide'];
     const isPublicPage = publicPages.some(page => location.pathname.startsWith(page));
     
     return (

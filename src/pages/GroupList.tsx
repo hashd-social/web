@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { Users, TrendingUp, Plus, Search, ExternalLink, UserPlus, UserMinus, Copy, Info } from 'lucide-react';
+import { useCurrentHashId } from '../hooks/useCurrentHashId';
 import { contractService, GROUP_FACTORY_ABI, USER_PROFILE_ABI } from '../utils/contracts';
 import { LoadingState } from '../components/Spinner';
 import { PageHeader } from '../components/PageHeader';
@@ -14,7 +15,6 @@ import { bytes32ToCid } from '../utils/contracts';
 const GROUP_FACTORY_ADDRESS = process.env.REACT_APP_GROUP_FACTORY || '';
 const USER_PROFILE_ADDRESS = process.env.REACT_APP_USER_PROFILE || '';
 const EXPLORER_URL = process.env.REACT_APP_EXPLORER_URL || '';
-
 
 interface Group {
   title: string;
@@ -46,6 +46,7 @@ interface GroupListProps {
 export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateClick, onGroupClick, userAddress }) => {
   const navigate = useNavigate();
   const notify = useNotify();
+  const { hashIdToken, accountIndex } = useCurrentHashId(userAddress || null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -57,6 +58,13 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
   useEffect(() => {
     loadGroups();
   }, [refreshTrigger]);
+
+  // Reload membership data when hashIdToken changes (e.g., switching accounts)
+  useEffect(() => {
+    if (groups.length > 0 && userAddress) {
+      loadMemberCountsAndJoinedStatus(groups);
+    }
+  }, [hashIdToken, userAddress]);
 
   const loadGroups = async () => {
     const overallStart = Date.now();
@@ -189,6 +197,8 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
   const loadMemberCountsAndJoinedStatus = async (groupList: Group[]) => {
     if (!userAddress || !USER_PROFILE_ADDRESS || !window.ethereum) return;
     
+    console.log('[GroupList] Loading membership with account index:', accountIndex !== null ? accountIndex : 'default (0)');
+    
     try {
       // Use fast read-only provider
       const { contractService } = await import('../utils/contracts');
@@ -202,9 +212,14 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
         return;
       }
       
-      // Batch check membership and get member counts
+      // Check membership for each group using account index
+      const indexToUse = accountIndex !== null ? accountIndex : 0;
+      const membershipPromises = groupTokens.map(token => 
+        userProfile.hasJoinedGroup(userAddress, token, indexToUse)
+      );
+      
       const [membershipStatuses, ...memberCountResults] = await Promise.all([
-        userProfile.batchHasJoinedGroup(userAddress, groupTokens),
+        Promise.all(membershipPromises),
         ...groupTokens.map(token => userProfile.getGroupMemberCount(token))
       ]);
       
@@ -244,7 +259,10 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
   const handleJoinGroup = async (groupToken: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!userAddress || !USER_PROFILE_ADDRESS || !window.ethereum) return;
+    if (!userAddress || !USER_PROFILE_ADDRESS || !window.ethereum) {
+      notify.error('Please connect your wallet to join groups');
+      return;
+    }
     
     setJoiningGroups(prev => new Set(prev).add(groupToken));
     
@@ -253,7 +271,9 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
     const userProfile = new ethers.Contract(USER_PROFILE_ADDRESS, USER_PROFILE_ABI, signer);
     
     try {
-      const tx = await userProfile.joinGroup(groupToken);
+      const indexToUse = accountIndex !== null ? accountIndex : 0;
+      console.log('[GroupList] Joining group with account index:', indexToUse);
+      const tx = await userProfile.joinGroup(groupToken, indexToUse);
       await tx.wait();
       
       // Update local state
@@ -273,7 +293,8 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
         // Check if user is actually a member now
         try {
           const address = await signer.getAddress();
-          const isMember = await userProfile.isMember(address, groupToken);
+          const indexToUse = accountIndex !== null ? accountIndex : 0;
+          const isMember = await userProfile.hasJoinedGroup(address, groupToken, indexToUse);
           if (isMember) {
             console.log('✅ User is already a member, updating UI...');
             // Update local state
@@ -315,16 +336,21 @@ export const GroupList: React.FC<GroupListProps> = ({ refreshTrigger, onCreateCl
   const handleLeaveGroup = async (groupToken: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!userAddress || !USER_PROFILE_ADDRESS || !window.ethereum) return;
+    if (!userAddress || !USER_PROFILE_ADDRESS || !window.ethereum) {
+      notify.error('Please connect your wallet to leave groups');
+      return;
+    }
     
     setJoiningGroups(prev => new Set(prev).add(groupToken));
     
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const userProfile = new ethers.Contract(USER_PROFILE_ADDRESS, USER_PROFILE_ABI, signer);
+    
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const userProfile = new ethers.Contract(USER_PROFILE_ADDRESS, USER_PROFILE_ABI, signer);
-      
-      const tx = await userProfile.leaveGroup(groupToken);
+      const indexToUse = accountIndex !== null ? accountIndex : 0;
+      console.log('[GroupList] Leaving group with account index:', indexToUse);
+      const tx = await userProfile.leaveGroup(groupToken, indexToUse);
       await tx.wait();
       
       // Update local state

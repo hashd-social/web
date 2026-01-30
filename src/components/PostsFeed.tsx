@@ -15,6 +15,8 @@ interface Post {
   commentCount: number;
   accessLevel: number;
   isDeleted: boolean;
+  hashIdToken: bigint;
+  publicKeyHash: string;
 }
 
 interface PostsFeedProps {
@@ -28,6 +30,8 @@ interface PostsFeedProps {
   isMember: boolean;
   contractService: any; // Will be properly typed when we update contracts.ts
   refreshTrigger?: number; // Increment to force refresh
+  currentUserHashIdToken?: bigint | null; // Current user's active HashID token
+  currentUserPublicKey?: string | null; // Current user's active public key
 }
 
 export default function PostsFeed({
@@ -40,7 +44,9 @@ export default function PostsFeed({
   isGroupOwner,
   isMember,
   contractService,
-  refreshTrigger = 0
+  refreshTrigger,
+  currentUserHashIdToken,
+  currentUserPublicKey
 }: PostsFeedProps) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,6 +156,14 @@ export default function PostsFeed({
       
       // Filter out any deleted posts (defensive, should already be filtered on-chain)
       const activePosts = postsData.filter((post: any) => !post.isDeleted);
+      
+      // Debug: Log author addresses
+      console.log('[PostsFeed] Current user address:', userAddress);
+      activePosts.forEach((post: any) => {
+        console.log(`[PostsFeed] Post ${post.id} author:`, post.author, 
+          'isAuthor:', post.author.toLowerCase() === userAddress.toLowerCase());
+      });
+      
       setPosts(activePosts);
     } catch (err) {
       console.error('❌ Error loading posts:', err);
@@ -286,7 +300,7 @@ export default function PostsFeed({
     setFailedPosts(prev => new Set(prev).add(postId));
   };
 
-  // Filter out posts that failed to load
+  // Filter out posts that failed to load (but keep locked posts visible)
   const visiblePosts = posts.filter(post => !failedPosts.has(post.id));
 
   if (isLoading) {
@@ -338,6 +352,10 @@ export default function PostsFeed({
                 isAuthor={post.author.toLowerCase() === userAddress.toLowerCase()}
                 groupKey={groupKey}
                 groupTokenAddress={groupTokenAddress}
+                hashIdToken={post.hashIdToken}
+                publicKeyHash={post.publicKeyHash}
+                currentUserHashIdToken={currentUserHashIdToken}
+                currentUserPublicKey={currentUserPublicKey}
                 onUpvote={handleUpvote}
                 onDelete={handleDeletePost}
                 onComment={handleComment}

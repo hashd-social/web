@@ -212,13 +212,13 @@ export const GROUP_POSTS_ABI = [
   "function getUserPostCount(address author) view returns (uint256 count)",
   
   // View functions - Batch
-  "function getPostsBatch(uint256[] postIds) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)[])",
+  "function getPostsBatch(uint256[] postIds) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted, uint256 hashIdToken, bytes32 publicKeyHash)[])",
   "function getCommentsBatch(uint256[] commentIds) view returns (tuple(uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted)[])",
   "function batchHasUpvotedPost(address user, uint256[] postIds) view returns (bool[])",
   "function batchHasUpvotedComment(address user, uint256[] commentIds) view returns (bool[])",
   
   // View functions - Single (UPDATED: optimized struct packing)
-  "function getPost(uint256 postId) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted))",
+  "function getPost(uint256 postId) view returns (tuple(uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 downvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted, uint256 hashIdToken, bytes32 publicKeyHash))",
   "function getComment(uint256 commentId) view returns (tuple(uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted))",
   "function posts(uint256 postId) view returns (uint256 id, bytes32 contentHash, uint256 timestamp, uint256 upvotes, uint256 commentCount, address author, uint8 accessLevel, bool isDeleted)",
   "function comments(uint256 commentId) view returns (uint256 id, uint256 postId, bytes32 contentHash, uint256 timestamp, uint256 upvotes, address author, bool isDeleted)",
@@ -226,7 +226,7 @@ export const GROUP_POSTS_ABI = [
   "function hasUpvotedComment(address user, uint256 commentId) view returns (bool)",
   
   // Helper functions
-  "function isMember(address user) view returns (bool)",
+  "function isMember(address user, uint256 accountIndex) view returns (bool)",
   "function postCount() view returns (uint256)",
   "function totalCommentCount() view returns (uint256)",
   "function userPostCount(address author) view returns (uint256)",
@@ -256,14 +256,19 @@ export const GROUP_FACTORY_ABI = [
   "event GroupCreated(address indexed owner, address tokenAddress, address nftAddress, address postsAddress, string title)"
 ];
 
+// UserProfile ABI - Public key-based membership using account index
+// Join/leave/check membership by specifying account index (0 = first account, 1 = second, etc.)
+// Account index corresponds to position in user's account array from AccountStorage
 export const USER_PROFILE_ABI = [
-  "function joinGroup(address groupToken)",
-  "function leaveGroup(address groupToken)",
-  "function hasJoinedGroup(address user, address groupToken) view returns (bool)",
-  "function isMember(address user, address groupToken) view returns (bool)",
-  "function getUserGroupCount(address user) view returns (uint256)",
+  "function joinGroup(address groupToken, uint256 accountIndex)",
+  "function leaveGroup(address groupToken, uint256 accountIndex)",
+  "function hasJoinedGroup(address user, address groupToken, uint256 accountIndex) view returns (bool)",
+  "function batchHasJoinedGroup(address user, uint256 accountIndex, address[] groupTokens) view returns (bool[])",
+  "function getUserGroupCount(address user, uint256 accountIndex) view returns (uint256)",
   "function getGroupMemberCount(address groupToken) view returns (uint256)",
-  "function batchHasJoinedGroup(address user, address[] groupTokens) view returns (bool[])",
+  "function batchGetGroupMemberCount(address[] groupTokens) view returns (uint256[])",
+  "function _getCallerPublicKeyView(address user, uint256 accountIndex) view returns (bytes)",
+  "function _getPublicKeyForHashIDView(address user, uint256 hashIDTokenId) view returns (bytes)",
   "event GroupJoined(address indexed user, address indexed groupToken, uint256 timestamp, uint256 newMemberCount)",
   "event GroupLeft(address indexed user, address indexed groupToken, uint256 timestamp, uint256 newMemberCount)"
 ];
@@ -1458,7 +1463,9 @@ export class ContractService {
         downvotes: Number(post.downvotes),
         commentCount: Number(post.commentCount),
         accessLevel: Number(post.accessLevel),
-        isDeleted: post.isDeleted
+        isDeleted: post.isDeleted,
+        hashIdToken: post.hashIdToken,
+        publicKeyHash: post.publicKeyHash
       }));
       
       console.log('📖 Mapped posts:', mapped);
@@ -1555,21 +1562,11 @@ export class ContractService {
     const bytes32Hash = cidToBytes32(contentHash);
     console.log('📝 Converted to bytes32:', bytes32Hash);
     console.log('📝 Signer address:', signerAddress);
-    
-    // Pre-flight checks
-    try {
-      const isMember = await contract.isMember(signerAddress);
-      console.log('📝 Is member:', isMember);
-      if (!isMember) {
-        throw new Error('You are not a member of this group. Please join the group first.');
-      }
-    } catch (error: any) {
-      console.error('❌ Membership check failed:', error);
-      throw new Error('Failed to verify group membership: ' + error.message);
-    }
+    console.log('📝 HashID Token:', hashIdToken);
     
     try {
       // Pass hashIdToken as string - ethers.js will handle BigInt conversion for uint256
+      // Contract will verify membership with this specific HashID
       console.log('📝 Calling createPost with:', { bytes32Hash, accessLevel, hashIdToken });
       const tx = await contract.createPost(bytes32Hash, accessLevel, hashIdToken);
       console.log('✅ Post creation tx:', tx.hash);
@@ -2117,6 +2114,94 @@ export class ContractService {
     );
     
     return await hashID.transferFrom(fromAddress, toAddress, tokenId);
+  }
+
+  /**
+   * Get author display information for a post
+   * @param hashIdToken The HashID token used to create the post
+   * @param publicKeyHash The stored public key hash from when the post was created
+   * @param currentUserAddress The current user's wallet address
+   * @returns Author display info including name, whether it's transferred, and original public key
+   */
+  async getPostAuthorInfo(
+    hashIdToken: bigint,
+    publicKeyHash: string,
+    currentUserAddress: string
+  ): Promise<{
+    authorName: string;
+    isTransferred: boolean;
+    originalPublicKey: string;
+  }> {
+    const USER_PROFILE_ADDRESS = process.env.REACT_APP_USER_PROFILE || '';
+    const HASHID_ADDRESS = process.env.REACT_APP_HASHID || '';
+    
+    if (!USER_PROFILE_ADDRESS || !HASHID_ADDRESS) {
+      throw new Error('Missing contract addresses');
+    }
+
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    
+    const userProfileContract = new ethers.Contract(
+      USER_PROFILE_ADDRESS,
+      ['function _getPublicKeyForHashIDView(address user, uint256 hashIDTokenId) view returns (bytes)'],
+      provider
+    );
+
+    // Get the current owner of the HashID token
+    const hashIdContract = new ethers.Contract(
+      HASHID_ADDRESS,
+      [
+        'function tokenIdToName(uint256 tokenId) view returns (string)',
+        'function ownerOf(uint256 tokenId) view returns (address)'
+      ],
+      provider
+    );
+    
+    const hashIdName = await hashIdContract.tokenIdToName(hashIdToken);
+    
+    // Try to get current owner - this might fail if HashID was burned
+    let currentOwner: string;
+    try {
+      currentOwner = await hashIdContract.ownerOf(hashIdToken);
+    } catch (ownerErr) {
+      // HashID was burned or doesn't exist anymore
+      return {
+        authorName: hashIdName,
+        isTransferred: true,
+        originalPublicKey: publicKeyHash
+      };
+    }
+    
+    // Get the current owner's public key for this HashID
+    try {
+      const currentOwnerPublicKey = await userProfileContract._getPublicKeyForHashIDView(currentOwner, hashIdToken);
+      const currentOwnerHash = ethers.keccak256(currentOwnerPublicKey);
+      
+      if (currentOwnerHash.toLowerCase() === publicKeyHash.toLowerCase()) {
+        // HashID is still linked to the original public key
+        return {
+          authorName: hashIdName,
+          isTransferred: false,
+          originalPublicKey: ''
+        };
+      } else {
+        // HashID has been transferred or re-linked to a different public key
+        return {
+          authorName: hashIdName,
+          isTransferred: true,
+          originalPublicKey: publicKeyHash
+        };
+      }
+    } catch (linkErr) {
+      // HashID is detached or no longer linked to current owner
+      // This is the most common case when a HashID is detached
+      console.log('[ContractService] HashID detached or not linked:', linkErr);
+      return {
+        authorName: hashIdName,
+        isTransferred: true,
+        originalPublicKey: publicKeyHash
+      };
+    }
   }
 }
 

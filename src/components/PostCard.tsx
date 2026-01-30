@@ -4,6 +4,7 @@ import { ThumbsUp, MessageCircle, Trash2, MoreVertical, Lock, ArrowUp, ExternalL
 import { downloadAndDecryptPost, PostContent, AccessLevel } from '../services/ipfs/groupPosts';
 import { ImageModal } from './modals/ImageModal';
 import { useSettingsStore } from '../store/settingsStore';
+import { ethers } from 'ethers';
 
 const formatTimeAgo = (timestamp: number): string => {
   const now = Date.now();
@@ -36,6 +37,10 @@ interface PostCardProps {
   isAuthor: boolean;
   groupKey: string;
   groupTokenAddress: string;
+  hashIdToken: bigint;
+  publicKeyHash: string;
+  currentUserHashIdToken?: bigint | null;
+  currentUserPublicKey?: string | null;
   onUpvote: (postId: number) => Promise<void>;
   onDelete?: (postId: number) => Promise<void>;
   onComment: (postId: number) => void;
@@ -59,6 +64,10 @@ export default function PostCard({
   isAuthor,
   groupKey,
   groupTokenAddress,
+  hashIdToken,
+  publicKeyHash,
+  currentUserHashIdToken,
+  currentUserPublicKey,
   onUpvote,
   onDelete,
   onComment,
@@ -72,25 +81,175 @@ export default function PostCard({
   const [showMenu, setShowMenu] = useState(false);
   const [isUpvoting, setIsUpvoting] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [authorName, setAuthorName] = useState<string>('');
+  const [isHashIdTransferred, setIsHashIdTransferred] = useState<boolean>(false);
+  const [originalPublicKey, setOriginalPublicKey] = useState<string>('');
+
+  // Author Header Component
+  const AuthorHeader = ({ isLocked = false }: { isLocked?: boolean }) => {
+    const textColor = isLocked ? 'text-gray-400' : 'text-white';
+    const timeColor = isLocked ? 'text-gray-500' : 'text-gray-400';
+    const avatarGradient = isLocked 
+      ? 'from-gray-700 to-gray-800' 
+      : 'from-cyan-500/20 to-cyan-600/20';
+    const avatarTextColor = isLocked ? 'text-gray-400' : 'text-cyan-400';
+
+    return (
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 bg-gradient-to-br ${avatarGradient} rounded-full flex items-center justify-center ${avatarTextColor} font-bold font-mono`}>
+          {authorName ? authorName.slice(0, 2).toUpperCase() : author.slice(2, 4).toUpperCase()}
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <p className={`font-bold ${textColor} font-mono text-sm`}>
+              {authorName || `${author.slice(0, 6)}...${author.slice(-4)}`}
+            </p>
+            {isHashIdTransferred && (
+              <span 
+                className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded flex items-center gap-1 font-mono cursor-help"
+                title={`HashID transferred/detached. Original public key: ${originalPublicKey.slice(0, 10)}...${originalPublicKey.slice(-8)}`}
+              >
+                ⚠️ Transferred
+              </span>
+            )}
+            {!isLocked && (() => {
+              const info = getAccessLevelInfo();
+              const Icon = info.icon;
+              const colorClasses = {
+                gray: 'bg-gray-700/40 text-gray-300',
+                blue: 'bg-blue-500/20 text-blue-400',
+                green: 'bg-green-500/20 text-green-400',
+                purple: 'bg-purple-500/20 text-purple-400'
+              };
+              return (
+                <span className={`px-2 py-0.5 ${colorClasses[info.color as keyof typeof colorClasses]} text-xs font-bold rounded flex items-center gap-1 font-mono`}>
+                  <Icon className="w-3 h-3" />
+                  {info.label}
+                </span>
+              );
+            })()}
+            {isLocked && (
+              <span className={`px-2 py-0.5 bg-${getAccessLevelInfo().color}-500/20 text-${getAccessLevelInfo().color}-400 text-xs font-bold rounded flex items-center gap-1 font-mono`}>
+                <Lock className="w-3 h-3" />
+                {getAccessLevelInfo().label}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <p className={`text-sm ${timeColor} font-mono`}>
+              {formatTimeAgo(timestamp)}
+            </p>
+            {isHashIdTransferred && originalPublicKey && (
+              <p className="text-xs text-yellow-400/70 font-mono">
+                Original key: {originalPublicKey.slice(0, 10)}...{originalPublicKey.slice(-8)}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   useEffect(() => {
     loadContent();
   }, [contentHash, groupKey]);
 
+  useEffect(() => {
+    loadAuthorName();
+  }, [hashIdToken, author]);
+
+  const loadAuthorName = async () => {
+    try {
+      console.log('[PostCard] Loading author name for post:', {
+        postId,
+        hashIdToken: hashIdToken?.toString(),
+        currentUserHashIdToken: currentUserHashIdToken?.toString(),
+        publicKeyHash,
+        currentUserPublicKey,
+        author
+      });
+      
+      if (hashIdToken && hashIdToken > BigInt(0) && publicKeyHash) {
+        // Step 1: Compare public key hashes
+        if (currentUserPublicKey) {
+          const currentUserPublicKeyHash = ethers.keccak256(currentUserPublicKey);
+          console.log('[PostCard] Comparing hashes:', {
+            postPublicKeyHash: publicKeyHash,
+            currentUserPublicKeyHash
+          });
+          
+          if (currentUserPublicKeyHash.toLowerCase() === publicKeyHash.toLowerCase()) {
+            // Public keys match - current user created this post
+            console.log('[PostCard] Public keys match - current user created this post');
+            
+            // Step 2: Check if HashID tokens match
+            if (currentUserHashIdToken && hashIdToken === currentUserHashIdToken) {
+              // Same HashID - show "You"
+              console.log('[PostCard] Same HashID - showing "You"');
+              setAuthorName('You');
+              setIsHashIdTransferred(false);
+              setOriginalPublicKey('');
+            } else {
+              // Different HashID - show "You" with transferred flag
+              console.log('[PostCard] Different HashID - showing "You" with transferred flag');
+              setAuthorName('You');
+              setIsHashIdTransferred(true);
+              setOriginalPublicKey(publicKeyHash);
+            }
+            return;
+          }
+        }
+        
+        // Step 3: Public keys don't match - get the HashID name of the poster
+        console.log('[PostCard] Public keys do not match - fetching poster HashID name');
+        const provider = new ethers.BrowserProvider((window as any).ethereum);
+        const signer = await provider.getSigner();
+        const currentUserAddress = await signer.getAddress();
+        
+        const { contractService } = await import('../utils/contracts');
+        const authorInfo = await contractService.getPostAuthorInfo(
+          hashIdToken,
+          publicKeyHash,
+          currentUserAddress
+        );
+        
+        setAuthorName(authorInfo.authorName);
+        setIsHashIdTransferred(authorInfo.isTransferred);
+        setOriginalPublicKey(authorInfo.originalPublicKey);
+      } else {
+        // No HashID or no public key hash - show formatted wallet address
+        setAuthorName(`${author.slice(0, 6)}...${author.slice(-4)}`);
+        setIsHashIdTransferred(false);
+        setOriginalPublicKey('');
+      }
+    } catch (err) {
+      console.error('Error loading author name:', err);
+      // Fallback to formatted wallet address
+      setAuthorName(`${author.slice(0, 6)}...${author.slice(-4)}`);
+      setIsHashIdTransferred(false);
+      setOriginalPublicKey('');
+    }
+  };
+
   // Check if user has access to view this post
   // Access is determined by the post's access level setting
   const canView = () => {
-    if (isAuthor) return true; // Authors can always view their own posts
+    // Check if current user is the author by comparing public key hashes
+    const isPostAuthor = currentUserPublicKey && publicKeyHash && 
+      ethers.keccak256(currentUserPublicKey).toLowerCase() === publicKeyHash.toLowerCase();
+    
+    // Authors can always view their own posts (even if they left the group)
+    if (isPostAuthor) return true;
     
     switch (accessLevel) {
       case AccessLevel.PUBLIC:
         return true; // Anyone can view public posts
       case AccessLevel.MEMBERS_ONLY:
-        return isMember; // Must be a member
+        return isMember; // Must be a member (non-authors see blurred if not member)
       case AccessLevel.TOKEN_HOLDERS:
-        return hasToken; // Must hold ERC20 tokens
+        return hasToken; // Must hold ERC20 tokens (regardless of membership)
       case AccessLevel.NFT_HOLDERS:
-        return hasNFT; // Must hold ERC721 NFT
+        return hasNFT; // Must hold ERC721 NFT (regardless of membership)
       default:
         return false;
     }
@@ -117,8 +276,19 @@ export default function PostCard({
       setError(null);
 
       // Check if user has access
-      if (!canView()) {
+      const hasAccess = canView();
+      console.log(`[PostCard ${postId}] Access check:`, {
+        accessLevel,
+        isMember,
+        hasToken,
+        hasNFT,
+        isAuthor,
+        hasAccess
+      });
+      
+      if (!hasAccess) {
         const info = getAccessLevelInfo();
+        console.log(`[PostCard ${postId}] Access denied, showing locked UI:`, info.label);
         setError(`🔒 ${info.label} Only`);
         setIsLoading(false);
         return;
@@ -205,25 +375,7 @@ export default function PostCard({
         {/* Header */}
         <div className="p-4 border-b border-cyan-500/10">
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-gray-700 to-gray-800 rounded-full flex items-center justify-center text-gray-400 font-bold font-mono">
-                {author.slice(2, 4).toUpperCase()}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-gray-400 font-mono text-sm">
-                    {author.slice(0, 6)}...{author.slice(-4)}
-                  </p>
-                  <span className={`px-2 py-0.5 ${colorClasses[info.color as keyof typeof colorClasses]} text-xs font-bold rounded flex items-center gap-1 font-mono`}>
-                    <Lock className="w-3 h-3" />
-                    {info.label}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500 font-mono">
-                  {formatTimeAgo(timestamp)}
-                </p>
-              </div>
-            </div>
+            <AuthorHeader isLocked={true} />
           </div>
         </div>
 
@@ -262,37 +414,7 @@ export default function PostCard({
       {/* Header */}
       <div className="p-4 border-b border-gray-700/30">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 rounded-full flex items-center justify-center text-cyan-400 font-bold font-mono">
-              {author.slice(2, 4).toUpperCase()}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="font-bold text-white font-mono text-sm">
-                  {author.slice(0, 6)}...{author.slice(-4)}
-                </p>
-                {(() => {
-                  const info = getAccessLevelInfo();
-                  const Icon = info.icon;
-                  const colorClasses = {
-                    gray: 'bg-gray-700/40 text-gray-300',
-                    blue: 'bg-blue-500/20 text-blue-400',
-                    green: 'bg-green-500/20 text-green-400',
-                    purple: 'bg-purple-500/20 text-purple-400'
-                  };
-                  return (
-                    <span className={`px-2 py-0.5 ${colorClasses[info.color as keyof typeof colorClasses]} text-xs font-bold rounded flex items-center gap-1 font-mono`}>
-                      <Icon className="w-3 h-3" />
-                      {info.label}
-                    </span>
-                  );
-                })()}
-              </div>
-              <p className="text-sm text-gray-400 font-mono">
-                {formatTimeAgo(timestamp)}
-              </p>
-            </div>
-          </div>
+          <AuthorHeader isLocked={false} />
 
           {/* Menu */}
           <div className="relative">
